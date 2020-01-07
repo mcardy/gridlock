@@ -1,0 +1,24 @@
+{
+  "name": "gridlock",
+  "version": "0.0.1",
+  "description": "An agent based traffic simulator web application",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mcardy/gridlock.git"
+  },
+  "author": "Michael Cardy",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/mcardy/gridlock/issues"
+  },
+  "homepage": "https://github.com/mcardy/gridlock#readme",
+  "dependencies": {
+    "colyseus": "^0.11.25",
+    "express": "^4.17.1"
+  }
+}
