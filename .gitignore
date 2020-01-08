@@ -102,3 +102,6 @@ dist
 
 # TernJS port file
 .tern-port
+
+# Bundle should not be included as it is generated with npm install
+bundle.js

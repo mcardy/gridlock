@@ -5,8 +5,10 @@ var PORT = config.port;
 var HOST = config.host;
 
 var app = express();
+app.use("/public", express.static(__dirname + "/client/public"));
+
 app.get('/', (request, response) => {
-  response.send("Hello World");
+  response.sendFile(__dirname + "/client/public/index.html")
 });
 
 app.listen(PORT, HOST);
