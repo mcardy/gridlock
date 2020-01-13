@@ -4,9 +4,10 @@
   "description": "An agent based traffic simulator web application",
   "main": "app.js",
   "scripts": {
-    "start": "node app.js",
+    "start": "ts-node app.ts",
     "bundle": "webpack --config client/webpack.config.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "npm run-script bundle && npm start"
   },
   "repository": {
     "type": "git",
@@ -20,11 +21,20 @@
   "homepage": "https://github.com/mcardy/gridlock#readme",
   "dependencies": {
     "colyseus": "^0.11.25",
+    "colyseus.js": "^0.11.7",
     "express": "^4.17.1",
-    "pixi.js": "^5.2.0"
+    "pixi.js": "^5.2.0",
+    "random-js": "^2.1.0"
   },
   "devDependencies": {
-    "webpack-cli": "^3.3.10",
-    "webpack": "^4.41.5"
+    "ts-node": "^8.5.4",
+    "typescript": "^3.7.4",
+    "webpack": "^4.41.5",
+    "webpack-cli": "^3.3.10"
+  },
+  "babel": {
+    "presets": [
+      "es2015"
+    ]
   }
 }

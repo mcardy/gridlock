@@ -1,22 +1,28 @@
-import * as PIXI from 'pixi.js'
+import { app } from './app'
+import { render } from './map'
 
-function start() {
-    let app = new PIXI.Application({
-        width: 800,
-        height: 600,
-        antialias: true,
-        transparent: false,
-        resolution: 1
+import * as Colyseus from "colyseus.js";
+
+// Simulation room stuff
+var host = window.document.location.host.replace(/:.*/, '');
+var client = new Colyseus.Client(location.protocol.replace("http", "ws") + "//" + host + (location.port ? ':' + location.port : ''));
+client.joinOrCreate("simulation").then(room => {
+    console.log("joined");
+    room.onStateChange.once(function (state) {
+        console.log("initial room state:", state);
     });
+    // new room state
+    room.onStateChange(function (state) {
+        console.log("state change: ", state);
+        render(state)
+        // this signal is triggered on each patch
+    });
+    // listen to patches coming from the server
+    room.onMessage(function (message) {
+        console.log(message)
+    });
+    // send message to room on submit
 
-    app.renderer.view.style.position = "absolute";
-    app.renderer.view.style.display = "block";
-    app.renderer.autoResize = true;
-    app.renderer.resize(window.innerWidth, window.innerHeight);
-
-    app.renderer.backgroundColor = 0x061639;
-
-    document.body.appendChild(app.view);
-}
-
-start();
+    // send data to room
+    room.send({ message: "This is only a test" });
+});
