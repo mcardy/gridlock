@@ -5,7 +5,8 @@ let app = new PIXI.Application({
     height: 600,
     antialias: true,
     transparent: false,
-    resolution: 1
+    resolution: 1,
+    autoStart: false
 });
 
 app.renderer.view.style.position = "absolute";

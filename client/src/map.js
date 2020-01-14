@@ -7,6 +7,7 @@ function render(state) {
     state.agents.forEach(function (agent) {
         renderAgent(agent.location.x, agent.location.y)
     });
+    app.render();
 }
 
 function renderMap(map) {
@@ -15,6 +16,7 @@ function renderMap(map) {
     vertices.forEach(function (vertex) {
         drawVertex(vertex.location.x, vertex.location.y);
     });
+
     edges.forEach(function (edge) {
         if (edge.source != NaN && edge.dest != NaN) {
             var invert = edge.invert;
@@ -27,9 +29,13 @@ function drawCurve(l1, l2, invert = false) {
     let curve = new PIXI.Graphics();
     curve.lineStyle(4, 0xFFFFFF, 0.5);
     curve.moveTo(l1.x, l1.y);
-    var ctrlX = invert ? l1.x : l2.x;
-    var ctrlY = invert ? l2.y : l1.y;
-    curve.bezierCurveTo(ctrlX, ctrlY, ctrlX, ctrlY, l2.x, l2.y);
+    if (l1.x == l2.x || l1.y == l2.y) {
+        curve.lineTo(l2.x, l2.y);
+    } else {
+        var ctrlX = invert ? l1.x : l2.x;
+        var ctrlY = invert ? l2.y : l1.y;
+        curve.quadraticCurveTo(ctrlX, ctrlY, l2.x, l2.y);
+    }
 
     app.stage.addChild(curve);
 }
