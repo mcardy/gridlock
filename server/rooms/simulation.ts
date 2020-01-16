@@ -26,6 +26,62 @@ const testMap3 = '{"seed":11234071749817,"width":400,"height":400,\
 "intersections":[{"vertices":[1,2,3,4],"timings":[5,1]}]\
 }';
 
+const testMap4 = {
+    seed: 11234071749817,
+    width: 400,
+    height: 400,
+    vertices: [
+        // Sources
+        { id: 1, location: { x: 100, y: 0 }, source: true },
+        { id: 3, location: { x: 250, y: 100 }, source: true },
+        { id: 5, location: { x: 150, y: 250 }, source: true },
+        { id: 7, location: { x: 0, y: 150 }, source: true },
+        // Destinations
+        { id: 2, location: { x: 150, y: 0 }, dest: true },
+        { id: 4, location: { x: 250, y: 150 }, dest: true },
+        { id: 6, location: { x: 100, y: 250 }, dest: true },
+        { id: 8, location: { x: 0, y: 100 }, dest: true },
+        // Intersection items
+        { id: 9, location: { x: 100, y: 75 } },
+        { id: 10, location: { x: 150, y: 75 } },
+        { id: 11, location: { x: 175, y: 100 } },
+        { id: 12, location: { x: 175, y: 150 } },
+        { id: 13, location: { x: 150, y: 175 } },
+        { id: 14, location: { x: 100, y: 175 } },
+        { id: 15, location: { x: 75, y: 150 } },
+        { id: 16, location: { x: 75, y: 100 } }
+    ],
+    edges: [
+        { source: 1, dest: 9 },
+        { source: 10, dest: 2 },
+        { source: 3, dest: 11 },
+        { source: 12, dest: 4 },
+        { source: 5, dest: 13 },
+        { source: 14, dest: 6 },
+        { source: 7, dest: 15 },
+        { source: 16, dest: 8 },
+
+        { source: 9, dest: 12, invert: true },
+        { source: 9, dest: 14, invert: true },
+        { source: 9, dest: 16, invert: true },
+
+        { source: 11, dest: 10 },
+        { source: 11, dest: 14 },
+        { source: 11, dest: 16 },
+
+        { source: 13, dest: 10, invert: true },
+        { source: 13, dest: 12, invert: true },
+        { source: 13, dest: 16, invert: true },
+
+        { source: 15, dest: 10 },
+        { source: 15, dest: 12 },
+        { source: 15, dest: 14 }
+
+    ],
+    intersections: []
+}
+
+
 class Location extends Schema {
     @type('number')
     x: number
@@ -98,6 +154,74 @@ class Map extends Schema {
     public findOutgoingEdge(vertex: Vertex): Edge {
         return this.edges.find(function (edge) { return edge.source == vertex });
     }
+
+    public getAssignableDestinations(source: Vertex): Vertex[] {
+        var destinations: Vertex[] = new ArraySchema<Vertex>();
+        var adjacencyList = this.getAdjacencyList();
+        var visited: Vertex[] = [];
+        var next: Vertex[] = [source];
+        while (next.length != 0) {
+            var current = next.splice(0, 1)[0];
+            if (visited.indexOf(current) >= 0) continue;
+            if (current.dest) destinations.push(current);
+            if (current.id in adjacencyList) {
+                let edge: Edge;
+                for (edge of adjacencyList[current.id]) {
+                    next.push(edge.dest);
+                }
+            }
+        }
+        return destinations;
+    }
+
+    /**
+     * Returns a path in stack order from source to destination
+     * For example, if source is 1 and dest is 3 and they are linked by vertex 2, the
+     * resulting array will be [3,2,1], ie. the last item will be the source.
+     * @param source 
+     * @param dest 
+     */
+    public getBestPath(source: Vertex, dest: Vertex): Edge[] {
+        type TraceableVertex = { parent: TraceableVertex, edge: Edge, node: Vertex };
+        var adjacencyList = this.getAdjacencyList();
+        var bestPath: Edge[] = null;
+        var visited: Vertex[] = [];
+        var next: TraceableVertex[] = [{ parent: null, edge: null, node: source }];
+        while (next.length != 0) {
+            var current = next.splice(0, 1)[0];
+            if (visited.indexOf(current.node) >= 0) continue;
+            if (current.node == dest) {
+                var path: Edge[] = new ArraySchema<Edge>();
+                var parent: TraceableVertex = current;
+                while (parent.parent != null) {
+                    path.push(parent.edge);
+                    parent = parent.parent;
+                }
+                if (bestPath == null || path.length < bestPath.length) {
+                    bestPath = path;
+                }
+            }
+            if (current.node.id in adjacencyList) {
+                let edge: Edge;
+                for (edge of adjacencyList[current.node.id]) {
+                    next.push({ parent: current, edge: edge, node: edge.dest });
+                }
+            }
+        }
+        return bestPath;
+    }
+
+    public getAdjacencyList(): Record<number, Edge[]> {
+        const adjacencyList: Record<number, Edge[]> = {};
+        for (const edge of this.edges) {
+            if (edge.source.id in adjacencyList) {
+                adjacencyList[edge.source.id].push(edge);
+            } else {
+                adjacencyList[edge.source.id] = [edge];
+            }
+        }
+        return adjacencyList;
+    }
 }
 
 class Agent extends Schema {
@@ -113,6 +237,8 @@ class Agent extends Schema {
     t: number
     @type('number')
     speed: number = 1
+    @type([Edge])
+    path: Edge[]
 
     public shouldDespawn(): boolean {
         return this.edge == undefined || (this.location.x == this.dest.location.x && this.location.y == this.dest.location.y);
@@ -140,18 +266,16 @@ export class Simulation extends Room<SimulationState> {
     onCreate(options) {
         this.setState(new SimulationState());
         console.log("BasicRoom created!", options);
-
-        // Seed the random with a seed
-        var seed = 11234071749817;
-        this.random = new Random(MersenneTwister19937.seed(11234071749817))
-        this.spawnCounter = 0;
-
-        this.processMap(testMap2);
+        this.processMap(JSON.stringify(testMap4));
         this.clock.setInterval(updateAgents, 20, this);
     }
 
     processMap(map) {
         var mapObject = JSON.parse(map)
+
+        this.random = new Random(MersenneTwister19937.seed(mapObject.seed))
+        this.spawnCounter = 0;
+
         this.state.map = new Map();
         this.state.map.width = mapObject.width;
         this.state.map.height = mapObject.height;
@@ -176,6 +300,9 @@ export class Simulation extends Room<SimulationState> {
                 source: this.state.map.findVertexById(+edgeObject["source"]),
                 dest: this.state.map.findVertexById(+edgeObject["dest"])
             });
+            if ('invert' in edgeObject) {
+                edge.invert = edgeObject.invert == true;
+            }
             this.state.map.edges.push(edge);
         }
         for (const intersectionObject of mapObject["intersections"]) {
@@ -224,8 +351,8 @@ function updateAgents(that: Simulation) {
             that.spawnCounter = 0;
             var sourceId = that.state.sources[that.random.integer(0, that.state.sources.length - 1)];
             var source = that.state.map.findVertexById(sourceId);
-            var destId = that.state.destinations[that.random.integer(0, that.state.destinations.length - 1)];
-            var dest = that.state.map.findVertexById(destId);
+            var destinations = that.state.map.getAssignableDestinations(source);
+            var dest = destinations[that.random.integer(0, destinations.length - 1)];
 
             var location = new Location();
             location.x = source.location.x;
@@ -233,9 +360,11 @@ function updateAgents(that: Simulation) {
 
             var agent = new Agent();
             agent.location = location;
-            agent.edge = that.state.map.findOutgoingEdge(source);
             agent.source = source;
             agent.dest = dest;
+            var path = that.state.map.getBestPath(source, dest);
+            agent.path = path;
+            agent.edge = agent.path.pop();
 
             that.state.agents.push(agent);
         }
@@ -285,7 +414,7 @@ function updateAgents(that: Simulation) {
                 agent.location.y = y;
             }
             if (agent.location.x == agent.edge.dest.location.x && agent.location.y == agent.edge.dest.location.y) {
-                agent.edge = that.state.map.findOutgoingEdge(agent.edge.dest);
+                agent.edge = agent.path.pop();
                 agent.t = 0;
             }
         });
