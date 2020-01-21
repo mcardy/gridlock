@@ -57,6 +57,11 @@ export class Edge extends Schema {
         }
     }
 
+    public connectsWith(edge: Edge): boolean {
+        if (edge == undefined) return false;
+        return this == edge || this.source == edge.dest || this.dest == edge.source;
+    }
+
     private calculateLength(): number {
         var p0: Location = new Location(this.source.location);
         var p2: Location = new Location(this.dest.location);
@@ -147,6 +152,17 @@ export class Agent extends Schema {
     public update(): void {
         if (this.edge == undefined) return;
         if (this.edge.currentPriority == 0 && this.location.x == this.edge.source.location.x && this.location.y == this.edge.source.location.y) return;
+        var positiveX = this.edge.source.location.x <= this.edge.dest.location.x;
+        var positiveY = this.edge.source.location.y <= this.edge.dest.location.y;
+        for (var agent of this.map.agents) {
+            if (agent != this && this.edge.connectsWith(agent.edge)) {
+                var distance = Math.sqrt(Math.pow(this.location.x - agent.location.x, 2) + Math.pow(this.location.y - agent.location.y, 2));
+                var tolerance = 10;
+                if (distance < tolerance && (
+                    (positiveX == this.location.x <= agent.location.x) && (positiveY == this.location.y <= agent.location.y)))
+                    return;
+            }
+        }
         var l1 = this.edge.source.location;
         var l2 = this.edge.dest.location;
         if (l1.x == l2.x) {
