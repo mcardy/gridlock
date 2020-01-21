@@ -4,7 +4,7 @@ import { app } from './app'
 function render(state) {
     app.stage.removeChildren();
     renderMap(state.map);
-    state.agents.forEach(function (agent) {
+    state.map.agents.forEach(function (agent) {
         renderAgent(agent.location.x, agent.location.y)
     });
     app.render();
@@ -16,18 +16,17 @@ function renderMap(map) {
     vertices.forEach(function (vertex) {
         drawVertex(vertex.location.x, vertex.location.y);
     });
-
     edges.forEach(function (edge) {
         if (edge.source != NaN && edge.dest != NaN) {
             var invert = edge.invert;
-            drawCurve(edge.source.location, edge.dest.location, invert);
+            drawCurve(edge.source.location, edge.dest.location, invert, edge.currentPriority == 0);
         }
     });
 }
 
-function drawCurve(l1, l2, invert = false) {
+function drawCurve(l1, l2, invert = false, disabled = false) {
     let curve = new PIXI.Graphics();
-    curve.lineStyle(4, 0xFFFFFF, 0.5);
+    curve.lineStyle(4, !disabled ? 0xFFFFFF : 0xFF0000, 0.5);
     curve.moveTo(l1.x, l1.y);
     if (l1.x == l2.x || l1.y == l2.y) {
         curve.lineTo(l2.x, l2.y);

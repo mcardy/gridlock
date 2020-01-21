@@ -20,7 +20,7 @@ client.joinOrCreate("simulation").then(room => {
     });
     // listen to patches coming from the server
     room.onMessage(function (message) {
-        console.log(message)
+        //console.log(message)
     });
     // send message to room on submit
 
