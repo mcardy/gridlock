@@ -144,11 +144,39 @@ function runMapEditor() {
         document.body.removeChild(download);
     });
     saveButton.style.height = buttonHeight;
-    saveButton.style.width = window.innerWidth / 4;
+    saveButton.style.width = window.innerWidth / 8;
     saveButton.style.position = "absolute";
     saveButton.style.top = window.innerHeight - buttonHeight;
     saveButton.style.left = window.innerWidth * 3 / 4;
     saveButton.style.borderRadius = 0;
     saveButton.innerHTML = "Save Map";
     document.body.appendChild(saveButton);
+
+    var loadButton = document.createElement("BUTTON");
+    loadButton.setAttribute("class", "btn btn-warning");
+    loadButton.addEventListener("click", function (event) {
+        var upload = document.createElement('INPUT');
+        upload.setAttribute("type", "file");
+        upload.style.display = "none";
+        upload.addEventListener("change", function (e) {
+            var reader = new FileReader();
+            reader.onload = function (event) {
+                var json = JSON.parse(event.target.result);
+                jsonEditor.set(json);
+                renderButton.click();
+            }
+            reader.readAsText(e.target.files[0]);
+            document.body.removeChild(e.target);
+        })
+        document.body.appendChild(upload);
+        upload.click();
+    });
+    loadButton.style.height = buttonHeight;
+    loadButton.style.width = window.innerWidth / 8;
+    loadButton.style.position = "absolute";
+    loadButton.style.top = window.innerHeight - buttonHeight;
+    loadButton.style.left = window.innerWidth * 7 / 8;
+    loadButton.style.borderRadius = 0;
+    loadButton.innerHTML = "Load Map";
+    document.body.appendChild(loadButton);
 }
