@@ -10,8 +10,13 @@ var HOST = config.host;
 
 var app = express();
 app.use("/public", express.static(__dirname + "/client/public"));
+app.use("/css/jsoneditor", express.static(__dirname + "/node_modules/jsoneditor/dist"));
 
 app.get('/', (request, response) => {
+  response.sendFile(__dirname + "/client/html/index.html")
+});
+
+app.get('/map/', (request, response) => {
   response.sendFile(__dirname + "/client/html/index.html")
 });
 

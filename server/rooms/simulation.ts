@@ -1,4 +1,5 @@
-import { Agent, Location, Vertex, Map, Edge, Intersection } from '../map';
+import { Agent, Point2D, Vertex, Map, Edge, Intersection, EdgeIntersect } from '../map';
+import { Mutex } from '../mutex';
 import { Room, Delayed, Client } from 'colyseus';
 import { Random, MersenneTwister19937 } from 'random-js';
 import { Schema, ArraySchema, type } from '@colyseus/schema';
@@ -29,7 +30,7 @@ const testMap3 = '{"seed":11234071749817,"width":400,"height":400,\
 
 const testMap4 = {
     seed: 11234071749817,
-    width: 400,
+    width: 600,
     height: 400,
     vertices: [
         // Sources
@@ -63,21 +64,21 @@ const testMap4 = {
         { source: 16, dest: 8 },
 
         // Intersection below
-        { source: 9, dest: 12, invert: true, priorities: [0, 0, 1, 0] },
+        { source: 9, dest: 12, invert: true, priorities: [0, 0, 0.5, 0] },
         { source: 9, dest: 14, invert: true, priorities: [0, 0, 1, 0] },
-        { source: 9, dest: 16, invert: true, priorities: [0, 0, 1, 0] },
+        { source: 9, dest: 16, invert: true, priorities: [0, 0, 0.5, 0] },
 
-        { source: 11, dest: 10, priorities: [1, 0, 0, 0] },
-        { source: 11, dest: 14, priorities: [1, 0, 0, 0] },
+        { source: 11, dest: 10, priorities: [0.5, 0, 0, 0] },
+        { source: 11, dest: 14, priorities: [0.5, 0, 0, 0] },
         { source: 11, dest: 16, priorities: [1, 0, 0, 0] },
 
         { source: 13, dest: 10, invert: true, priorities: [0, 0, 1, 0] },
-        { source: 13, dest: 12, invert: true, priorities: [0, 0, 1, 0] },
-        { source: 13, dest: 16, invert: true, priorities: [0, 0, 1, 0] },
+        { source: 13, dest: 12, invert: true, priorities: [0, 0, 0.5, 0] },
+        { source: 13, dest: 16, invert: true, priorities: [0, 0, 0.5, 0] },
 
-        { source: 15, dest: 10, priorities: [1, 0, 0, 0] },
+        { source: 15, dest: 10, priorities: [0.5, 0, 0, 0] },
         { source: 15, dest: 12, priorities: [1, 0, 0, 0] },
-        { source: 15, dest: 14, priorities: [1, 0, 0, 0] }
+        { source: 15, dest: 14, priorities: [0.5, 0, 0, 0] }
 
     ],
     intersections: [
@@ -95,8 +96,8 @@ class SimulationState extends Schema {
 export class Simulation extends Room<SimulationState> {
     random: Random;
     tickCounter: number;
-    spawnRate: number = 1;
-    tickRate: number = 40;
+    spawnRate: number = 5;
+    tickRate: number = 100;
     simulationSpeed: number = 1;
 
 
@@ -125,7 +126,7 @@ export class Simulation extends Room<SimulationState> {
             this.state.map.vertices.push(new Vertex({
                 dest: vertexObject["dest"] == true,
                 source: vertexObject["source"] == true,
-                location: new Location({
+                location: new Point2D({
                     x: +vertexObject["location"]["x"],
                     y: +vertexObject["location"]["y"]
                 }),
@@ -147,6 +148,27 @@ export class Simulation extends Room<SimulationState> {
                 priorities
             );
             this.state.map.edges.push(edge);
+        }
+        for (let i = 0; i < this.state.map.edges.length; i++) {
+            var e1 = this.state.map.edges[i];
+            var p: Point2D = new Point2D(e1.source.location);
+            var r: Point2D = e1.dest.location.minus(p);
+            for (let j = i + 1; j < this.state.map.edges.length; j++) {
+                var e2 = this.state.map.edges[j];
+                if (e2.source == e1.dest || e2.dest == e1.source || e1.source == e2.source) continue;
+                var q: Point2D = new Point2D(e2.source.location);
+                var s: Point2D = e2.dest.location.minus(q);
+                if (r.cross(s) != 0) {
+                    var t = q.minus(p).cross(s) / r.cross(s);
+                    var u = q.minus(p).cross(r) / r.cross(s);
+                    if (t >= 0 && t <= 1 && u >= 0 && u <= 1) {
+                        var ip = p.plus(r.times(t));
+                        var mutex = new Mutex<Agent>(); // The two intersection points share a mutex
+                        e1.intersectPoints.push(new EdgeIntersect({ edge: e2, point: ip, lock: mutex }));
+                        e2.intersectPoints.push(new EdgeIntersect({ edge: e1, point: ip, lock: mutex }));
+                    }
+                }
+            }
         }
         for (const intersectionObject of mapObject["intersections"]) {
             var intersection = new Intersection();

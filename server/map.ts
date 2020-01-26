@@ -1,20 +1,41 @@
 import { Schema, ArraySchema, type } from '@colyseus/schema';
+import { Mutex } from './mutex';
 
-export class Location extends Schema {
+export class Point2D extends Schema {
     @type('number')
     x: number
     @type('number')
     y: number
 
-    public constructor(init?: Partial<Location>) {
+    public constructor(init?: Partial<Point2D>) {
         super();
         Object.assign(this, init);
+    }
+
+    public plus(p: Point2D): Point2D {
+        return new Point2D({ x: this.x + p.x, y: this.y + p.y });
+    }
+
+    public minus(p: Point2D): Point2D {
+        return new Point2D({ x: this.x - p.x, y: this.y - p.y });
+    }
+
+    public cross(p: Point2D): number {
+        return this.x * p.y - this.y * p.x;
+    }
+
+    public times(k: number): Point2D {
+        return new Point2D({ x: this.x * k, y: this.y * k });
+    }
+
+    public distance(p: Point2D): number {
+        return Math.sqrt(Math.pow(this.x - p.x, 2) + Math.pow(this.y - p.y, 2));
     }
 }
 
 export class Vertex extends Schema {
-    @type(Location)
-    readonly location: Location
+    @type(Point2D)
+    readonly location: Point2D
     @type('number')
     readonly id: number
     @type('boolean')
@@ -24,6 +45,16 @@ export class Vertex extends Schema {
 
     public constructor(init?: Partial<Vertex>) {
         super();
+        Object.assign(this, init);
+    }
+}
+
+export class EdgeIntersect {
+    edge: Edge
+    point: Point2D
+    lock: Mutex<Agent>
+
+    public constructor(init?: Partial<EdgeIntersect>) {
         Object.assign(this, init);
     }
 }
@@ -44,6 +75,8 @@ export class Edge extends Schema {
     @type('number')
     currentPriority: number = 1;
 
+    // Server side properties
+    intersectPoints: EdgeIntersect[]
 
     public constructor(source: Vertex, dest: Vertex, invert: boolean, priorities: number[] = undefined) {
         super();
@@ -55,24 +88,30 @@ export class Edge extends Schema {
             this.priorities = priorities;
             this.currentPriority = priorities[0];
         }
+        this.intersectPoints = [];
+    }
+
+    public intersectsWith(edge: Edge): EdgeIntersect {
+        // Currently, the approximation is using linear segments, will expand to bezier curves in the future
+        return this.intersectPoints.find(function (ei) { return ei.edge == edge; });
     }
 
     public connectsWith(edge: Edge): boolean {
         if (edge == undefined) return false;
-        return this == edge || this.source == edge.dest || this.dest == edge.source;
+        return this == edge || this.dest == edge.source;
     }
 
     private calculateLength(): number {
-        var p0: Location = new Location(this.source.location);
-        var p2: Location = new Location(this.dest.location);
+        var p0: Point2D = new Point2D(this.source.location);
+        var p2: Point2D = new Point2D(this.dest.location);
         if (p0.x == p2.x) {
             return Math.abs(p0.y - p2.y);
         } else if (p0.y == p2.y) {
             return Math.abs(p0.x - p2.x);
         } else {
-            var p1 = new Location({ x: this.invert ? p0.x : p2.x, y: this.invert ? p2.y : p0.y })
-            var a = new Location();
-            var b = new Location();
+            var p1 = new Point2D({ x: this.invert ? p0.x : p2.x, y: this.invert ? p2.y : p0.y })
+            var a = new Point2D();
+            var b = new Point2D();
             a.x = p0.x - 2 * p1.x + p2.x;
             a.y = p0.y - 2 * p1.y + p2.y;
             b.x = 2 * p1.x - 2 * p0.x;
@@ -119,8 +158,8 @@ export class Agent extends Schema {
     @type('number')
     destId: number
 
-    @type(Location)
-    location: Location
+    @type(Point2D)
+    location: Point2D
     @type('number')
     speed: number = 1
 
@@ -131,6 +170,7 @@ export class Agent extends Schema {
     path: Edge[]
     edge: Edge
     map: Map
+    intersect: EdgeIntersect
 
     constructor(source: Vertex, dest: Vertex, map: Map) {
         super();
@@ -139,7 +179,7 @@ export class Agent extends Schema {
         this.source = source;
         this.dest = dest;
         this.map = map;
-        this.location = new Location({ x: source.location.x, y: source.location.y });
+        this.location = new Point2D({ x: source.location.x, y: source.location.y });
         this.path = this.map.getBestPath(source, dest);
         this.edge = this.path.pop();
         this.t = 0;
@@ -154,15 +194,63 @@ export class Agent extends Schema {
         if (this.edge.currentPriority == 0 && this.location.x == this.edge.source.location.x && this.location.y == this.edge.source.location.y) return;
         var positiveX = this.edge.source.location.x <= this.edge.dest.location.x;
         var positiveY = this.edge.source.location.y <= this.edge.dest.location.y;
+        if (this.intersect != undefined && this.location.distance(this.intersect.point) > 10 &&
+            (this.location.x <= this.intersect.point.x != positiveX || this.location.y <= this.intersect.point.y != positiveY)) {
+            this.intersect.lock.release(this);
+            this.intersect = undefined;
+        }
         for (var agent of this.map.agents) {
-            if (agent != this && this.edge.connectsWith(agent.edge)) {
-                var distance = Math.sqrt(Math.pow(this.location.x - agent.location.x, 2) + Math.pow(this.location.y - agent.location.y, 2));
-                var tolerance = 10;
-                if (distance < tolerance && (
-                    (positiveX == this.location.x <= agent.location.x) && (positiveY == this.location.y <= agent.location.y)))
-                    return;
+            if (agent != this) {
+                // Should repeat the following with this's next edge as well
+                if (this.edge.connectsWith(agent.edge)) {
+                    var distance = this.location.distance(agent.location);
+                    var tolerance = 10;
+                    if (distance < tolerance && !(this.location.x == agent.location.x && this.location.y == agent.location.y) && (
+                        (positiveX == this.location.x <= agent.location.x) && (positiveY == this.location.y <= agent.location.y)))
+                        return;
+                }
             }
         }
+
+        /* TODO move to its own function
+        var edgeIntersect = this.edge.intersectsWith(agent.edge);
+        if (edgeIntersect == undefined && agent.path.length > 0)
+            edgeIntersect = this.edge.intersectsWith(agent.path[agent.path.length - 1]);
+        if (edgeIntersect == undefined && this.path.length > 0)
+            edgeIntersect = this.path[this.path.length - 1].intersectsWith(agent.edge);
+        if (edgeIntersect == undefined && this.path.length > 0 && agent.path.length > 0)
+            edgeIntersect = this.path[this.path.length - 1].intersectsWith(agent.path[agent.path.length - 1]);
+        if (edgeIntersect != undefined) {
+            var dA = this.location.distance(edgeIntersect.point);
+            var dB = agent.location.distance(edgeIntersect.point);
+            if (dA > 20 || dB > 20) continue; // Some tolerance
+            if (positiveX == this.location.x <= edgeIntersect.point.x && positiveY == this.location.y <= edgeIntersect.point.y
+                && agent.edge.source.location.x <= agent.edge.dest.location.x == agent.location.x <= edgeIntersect.point.x
+                && agent.edge.source.location.y <= agent.edge.dest.location.y == agent.location.y <= edgeIntersect.point.y) {
+                // They are both moving TOWARD the lock
+                if (edgeIntersect.lock.isLocked()) {
+                    if (edgeIntersect.lock.isOwned(this)) {
+                        continue;
+                    } else if (edgeIntersect.lock.getOwner().edge == this.edge) {
+                        if (dA > edgeIntersect.point.distance(edgeIntersect.lock.getOwner().location)) {
+                            edgeIntersect.lock.release(edgeIntersect.lock.getOwner());
+                            edgeIntersect.lock.acquire(this);
+                            this.intersect = edgeIntersect;
+                        }
+                        continue;
+                    } else {
+                        return;
+                    }
+                } else {
+                    if (dA / this.edge.currentPriority < dB / agent.edge.currentPriority) {
+                        edgeIntersect.lock.acquire(this);
+                        this.intersect = edgeIntersect;
+                    }
+                }
+            }
+        }
+        */
+
         var l1 = this.edge.source.location;
         var l2 = this.edge.dest.location;
         if (l1.x == l2.x) {
@@ -173,8 +261,8 @@ export class Agent extends Schema {
             this.location.x += (l1.x < l2.x ? 1 : -1) * this.speed;
         } else {
             // Quadratic Bezier Curve, calculate differences in each direction normalized to the origin
-            /*var tx = agent.location.x - l1.x;
-            var ty = agent.location.y - l2.x;
+            /*var tx = agent.Point2D.x - l1.x;
+            var ty = agent.Point2D.y - l2.x;
             var xctl = agent.edge.invert ? l1.x : l2.x;
             var yctl = agent.edge.invert ? l2.y : l1.y;
             var ux = 2 * l1.x - 4 * xctl + 2 * l2.x;
@@ -186,8 +274,8 @@ export class Agent extends Schema {
             var lx = 100 / wx;
             var ly = 100 / wy;
             console.log(lx, ly);
-            agent.location.x += lx;
-            agent.location.y += ly;*/
+            agent.Point2D.x += lx;
+            agent.Point2D.y += ly;*/
             var xctl = this.edge.invert ? l1.x : l2.x;
             var yctl = this.edge.invert ? l2.y : l1.y;
 
@@ -207,6 +295,8 @@ export class Agent extends Schema {
             this.location.y = y;
         }
         if (this.location.x == this.edge.dest.location.x && this.location.y == this.edge.dest.location.y) {
+            for (var intersect of this.edge.intersectPoints)
+                intersect.lock.release(this);
             this.edge = this.path.pop();
             this.t = 0;
         }

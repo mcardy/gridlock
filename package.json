@@ -23,6 +23,7 @@
     "colyseus": "^0.11.25",
     "colyseus.js": "^0.11.7",
     "express": "^4.17.1",
+    "jsoneditor": "^8.4.1",
     "pixi.js": "^5.2.0",
     "random-js": "^2.1.0"
   },

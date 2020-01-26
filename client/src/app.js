@@ -12,10 +12,12 @@ let app = new PIXI.Application({
 app.renderer.view.style.position = "absolute";
 app.renderer.view.style.display = "block";
 app.renderer.autoResize = true;
-app.renderer.resize(window.innerWidth, window.innerHeight);
 
 app.renderer.backgroundColor = 0x061639;
 
-document.body.appendChild(app.view);
+app.init = function (width, height) {
+    app.renderer.resize(width, height);
+    document.body.appendChild(app.view);
+};
 
 export { app as app }
