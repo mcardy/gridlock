@@ -71,19 +71,19 @@ if (window.location.pathname == "/") {
 }
 
 function runSimulation() {
-    app.init(window.innerWidth, window.innerHeight);
+    app.renderer.resize(window.innerWidth, window.innerHeight);
     var host = window.document.location.host.replace(/:.*/, '');
     var client = new Colyseus.Client(location.protocol.replace("http", "ws") + "//" + host + (location.port ? ':' + location.port : ''));
     client.joinOrCreate("simulation").then(room => {
         console.log("joined");
         room.onStateChange.once(function (state) {
             console.log("initial room state:", state);
-            render(state.map);
+            render(state["map"]);
         });
         // new room state
         room.onStateChange(function (state) {
             console.log("state change: ", state);
-            render(state.map);
+            render(state["map"]);
             // this signal is triggered on each patch
         });
         // listen to patches coming from the server
@@ -98,14 +98,14 @@ function runSimulation() {
 }
 
 function runMapEditor() {
-    app.init(window.innerWidth / 2, window.innerHeight);
+    app.renderer.resize(window.innerWidth / 2, window.innerHeight);
     var buttonHeight = 60;
     var jsonEditorContainer = document.createElement("DIV");
     jsonEditorContainer.style.position = "absolute";
-    jsonEditorContainer.style.left = window.innerWidth / 2;
-    jsonEditorContainer.style.top = 0;
-    jsonEditorContainer.style.width = window.innerWidth / 2;
-    jsonEditorContainer.style.height = window.innerHeight - buttonHeight;
+    jsonEditorContainer.style.left = (window.innerWidth / 2).toString();
+    jsonEditorContainer.style.top = "0";
+    jsonEditorContainer.style.width = (window.innerWidth / 2).toString();
+    jsonEditorContainer.style.height = (window.innerHeight - buttonHeight).toString();
     document.body.appendChild(jsonEditorContainer);
 
     var templates = [
@@ -122,12 +122,12 @@ function runMapEditor() {
         var jsonMap = jsonEditor.get();
         render(jsonMap);
     });
-    renderButton.style.height = buttonHeight;
-    renderButton.style.width = window.innerWidth / 4;
+    renderButton.style.height = buttonHeight.toString();
+    renderButton.style.width = (window.innerWidth / 4).toString();
     renderButton.style.position = "absolute";
-    renderButton.style.top = window.innerHeight - buttonHeight;
-    renderButton.style.left = window.innerWidth / 2;
-    renderButton.style.borderRadius = 0;
+    renderButton.style.top = (window.innerHeight - buttonHeight).toString();
+    renderButton.style.left = (window.innerWidth / 2).toString();
+    renderButton.style.borderRadius = "0";
     renderButton.innerHTML = "Show Map";
     document.body.appendChild(renderButton);
 
@@ -143,12 +143,12 @@ function runMapEditor() {
         download.click();
         document.body.removeChild(download);
     });
-    saveButton.style.height = buttonHeight;
-    saveButton.style.width = window.innerWidth / 8;
+    saveButton.style.height = buttonHeight.toString();
+    saveButton.style.width = (window.innerWidth / 8).toString();
     saveButton.style.position = "absolute";
-    saveButton.style.top = window.innerHeight - buttonHeight;
-    saveButton.style.left = window.innerWidth * 3 / 4;
-    saveButton.style.borderRadius = 0;
+    saveButton.style.top = (window.innerHeight - buttonHeight).toString();
+    saveButton.style.left = (window.innerWidth * 3 / 4).toString();
+    saveButton.style.borderRadius = "0";
     saveButton.innerHTML = "Save Map";
     document.body.appendChild(saveButton);
 
@@ -157,26 +157,27 @@ function runMapEditor() {
     loadButton.addEventListener("click", function (event) {
         var upload = document.createElement('INPUT');
         upload.setAttribute("type", "file");
+        upload.setAttribute("id", "upload");
         upload.style.display = "none";
         upload.addEventListener("change", function (e) {
             var reader = new FileReader();
             reader.onload = function (event) {
-                var json = JSON.parse(event.target.result);
+                var json = JSON.parse(event.target.result.toString());
                 jsonEditor.set(json);
                 renderButton.click();
             }
-            reader.readAsText(e.target.files[0]);
-            document.body.removeChild(e.target);
+            reader.readAsText(e.target["files"][0]);
+            document.body.removeChild(document.getElementById("upload"));
         })
         document.body.appendChild(upload);
         upload.click();
     });
-    loadButton.style.height = buttonHeight;
-    loadButton.style.width = window.innerWidth / 8;
+    loadButton.style.height = buttonHeight.toString();
+    loadButton.style.width = (window.innerWidth / 8).toString();
     loadButton.style.position = "absolute";
-    loadButton.style.top = window.innerHeight - buttonHeight;
-    loadButton.style.left = window.innerWidth * 7 / 8;
-    loadButton.style.borderRadius = 0;
+    loadButton.style.top = (window.innerHeight - buttonHeight).toString();
+    loadButton.style.left = (window.innerWidth * 7 / 8).toString();
+    loadButton.style.borderRadius = "0";
     loadButton.innerHTML = "Load Map";
     document.body.appendChild(loadButton);
 }

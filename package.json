@@ -25,7 +25,8 @@
     "express": "^4.17.1",
     "jsoneditor": "^8.4.1",
     "pixi.js": "^5.2.0",
-    "random-js": "^2.1.0"
+    "random-js": "^2.1.0",
+    "ts-loader": "^6.2.1"
   },
   "devDependencies": {
     "ts-node": "^8.5.4",

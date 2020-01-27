@@ -1,37 +1,6 @@
 import { Schema, ArraySchema, type } from '@colyseus/schema';
 import { Mutex } from './mutex';
-
-export class Point2D extends Schema {
-    @type('number')
-    x: number
-    @type('number')
-    y: number
-
-    public constructor(init?: Partial<Point2D>) {
-        super();
-        Object.assign(this, init);
-    }
-
-    public plus(p: Point2D): Point2D {
-        return new Point2D({ x: this.x + p.x, y: this.y + p.y });
-    }
-
-    public minus(p: Point2D): Point2D {
-        return new Point2D({ x: this.x - p.x, y: this.y - p.y });
-    }
-
-    public cross(p: Point2D): number {
-        return this.x * p.y - this.y * p.x;
-    }
-
-    public times(k: number): Point2D {
-        return new Point2D({ x: this.x * k, y: this.y * k });
-    }
-
-    public distance(p: Point2D): number {
-        return Math.sqrt(Math.pow(this.x - p.x, 2) + Math.pow(this.y - p.y, 2));
-    }
-}
+import { Point2D } from '../common/math';
 
 export class Vertex extends Schema {
     @type(Point2D)
@@ -68,6 +37,10 @@ export class Edge extends Schema {
     readonly invert: boolean = false
     @type(['number'])
     readonly priorities: number[]
+    @type('number')
+    readonly ctrlX;
+    @type('number')
+    readonly ctrlY;
 
     // Derived/mutable parameters
     @type('number')
@@ -78,7 +51,7 @@ export class Edge extends Schema {
     // Server side properties
     intersectPoints: EdgeIntersect[]
 
-    public constructor(source: Vertex, dest: Vertex, invert: boolean, priorities: number[] = undefined) {
+    public constructor(source: Vertex, dest: Vertex, invert: boolean, priorities?: number[], ctrlX?: number, ctrlY?: number) {
         super();
         this.source = source;
         this.dest = dest;
@@ -89,6 +62,8 @@ export class Edge extends Schema {
             this.currentPriority = priorities[0];
         }
         this.intersectPoints = [];
+        this.ctrlX = ctrlX;
+        this.ctrlY = ctrlY;
     }
 
     public intersectsWith(edge: Edge): EdgeIntersect {
@@ -109,6 +84,7 @@ export class Edge extends Schema {
         } else if (p0.y == p2.y) {
             return Math.abs(p0.x - p2.x);
         } else {
+
             var p1 = new Point2D({ x: this.invert ? p0.x : p2.x, y: this.invert ? p2.y : p0.y })
             var a = new Point2D();
             var b = new Point2D();

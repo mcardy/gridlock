@@ -150,6 +150,16 @@ const map_schema = {
                             true
                         ]
                     },
+                    "ctrlX": {
+                        "$id": "#/properties/edges/items/properties/ctrlX",
+                        "type": "integer",
+                        "title": "Overwrite of default origin for bezier path"
+                    },
+                    "ctrlY": {
+                        "$id": "#/properties/edges/items/properties/ctrlY",
+                        "type": "integer",
+                        "title": "Overwrite of default origin for bezier path"
+                    },
                     "priorities": {
                         "$id": "#/properties/edge/item/properties/priorities",
                         "type": "array",

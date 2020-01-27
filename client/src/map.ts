@@ -1,5 +1,6 @@
 import * as PIXI from 'pixi.js'
 import { app } from './app'
+import { Point2D, BezierCurve } from '../../common/math'
 
 function render(map) {
     app.stage.removeChildren();
@@ -13,7 +14,6 @@ function renderMap(map) {
     var width = map.width;
     var height = map.height;
     var scaler = Math.min(screenWidth / width, screenHeight / height);
-    console.log(screenWidth / width, screenHeight / height);
 
     var vertices = map.vertices;
     var edges = map.edges;
@@ -33,7 +33,7 @@ function renderMap(map) {
                 dest = edge.dest;
             }
             if (source == "undefined" || dest == "undefined") return;
-            drawCurve(source.location, dest.location, invert, priority == 0, scaler);
+            drawCurve(source.location, dest.location, invert, priority == 0, scaler, (edge.ctrlX == undefined || edge.ctrlY == undefined) ? undefined : new Point2D({ x: edge.ctrlX, y: edge.ctrlY }));
         }
     });
     if (map.agents) {
@@ -44,16 +44,17 @@ function renderMap(map) {
     }
 }
 
-function drawCurve(l1, l2, invert = false, disabled = false, scaler = 1) {
+function drawCurve(l1, l2, invert = false, disabled = false, scaler = 1, origin = undefined) {
     let curve = new PIXI.Graphics();
     curve.lineStyle(4, !disabled ? 0xFFFFFF : 0xFF0000, 0.5);
     curve.moveTo(l1.x * scaler, l1.y * scaler);
     if (l1.x == l2.x || l1.y == l2.y) {
         curve.lineTo(l2.x * scaler, l2.y * scaler);
     } else {
-        var ctrlX = invert ? l1.x : l2.x;
-        var ctrlY = invert ? l2.y : l1.y;
-        curve.quadraticCurveTo(ctrlX * scaler, ctrlY * scaler, l2.x * scaler, l2.y * scaler);
+        var path = new BezierCurve(new Point2D(l1), new Point2D(l2), invert, origin);
+        var p2 = path.startCtrl();
+        var p3 = path.endCtrl();
+        curve.bezierCurveTo(p2.x * scaler, p2.y * scaler, p3.x * scaler, p3.y * scaler, l2.x * scaler, l2.y * scaler);
     }
 
     app.stage.addChild(curve);

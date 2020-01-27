@@ -1,0 +1,21 @@
+{
+    "compilerOptions": {
+        "outDir": "lib",
+        "module": "commonjs",
+        "lib": [
+            "es6",
+            "DOM"
+        ],
+        "target": "es6",
+        "declaration": true,
+        "noImplicitAny": false,
+        "experimentalDecorators": true,
+        "sourceMap": false,
+        "esModuleInterop": true
+    },
+    "include": [
+        "**/*.ts",
+        "../common/map_schema.ts",
+        "../common/math.ts"
+    ]
+}

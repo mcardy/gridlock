@@ -1,4 +1,5 @@
-import { Agent, Point2D, Vertex, Map, Edge, Intersection, EdgeIntersect } from '../map';
+import { Agent, Vertex, Map, Edge, Intersection, EdgeIntersect } from '../map';
+import { Point2D } from '../../common/math';
 import { Mutex } from '../mutex';
 import { Room, Delayed, Client } from 'colyseus';
 import { Random, MersenneTwister19937 } from 'random-js';
@@ -145,7 +146,9 @@ export class Simulation extends Room<SimulationState> {
                 this.state.map.findVertexById(+edgeObject["source"]),
                 this.state.map.findVertexById(+edgeObject["dest"]),
                 'invert' in edgeObject && edgeObject.invert == true,
-                priorities
+                priorities,
+                edgeObject["ctrlX"],
+                edgeObject["ctrlY"]
             );
             this.state.map.edges.push(edge);
         }

@@ -105,3 +105,5 @@ dist
 
 # Bundle should not be included as it is generated with npm install
 bundle.js
+
+client/lib
