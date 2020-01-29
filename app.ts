@@ -9,14 +9,11 @@ var PORT = config.port;
 var HOST = config.host;
 
 var app = express();
-app.use("/public", express.static(__dirname + "/client/public"));
-app.use("/css/jsoneditor", express.static(__dirname + "/node_modules/jsoneditor/dist"));
+app.use("/dist", express.static(__dirname + "/client/dist"));
 
-app.get('/', (request, response) => {
-  response.sendFile(__dirname + "/client/html/index.html")
-});
+var paths = ["/", "/map/"]
 
-app.get('/map/', (request, response) => {
+app.get(paths, (request, response) => {
   response.sendFile(__dirname + "/client/html/index.html")
 });
 

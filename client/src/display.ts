@@ -1,16 +1,35 @@
 import * as PIXI from 'pixi.js'
-import { app } from './app'
 import { Point2D, BezierCurve } from '../../common/math'
 
-function render(map) {
-    app.stage.removeChildren();
-    renderMap(map);
-    app.render();
+const Colours = {
+    primary: 0x061639,
+    secondary: 0xA9AABC,
+    tertiary: 0x757687,
+    emphasis: 0xA9AABC,
+    accent: 0xab385f//0x683236
 }
 
-function renderMap(map) {
-    var screenWidth = app.screen.width;
-    var screenHeight = app.screen.height;
+let PixiApp = new PIXI.Application({
+    width: 800,
+    height: 600,
+    antialias: true,
+    transparent: false,
+    resolution: 1,
+    autoStart: false
+});
+
+PixiApp.renderer.view.style.position = "absolute";
+PixiApp.renderer.view.style.display = "block";
+
+PixiApp.renderer.backgroundColor = Colours.primary;
+
+PixiApp.renderer.resize(window.innerWidth, window.innerHeight);
+document.body.appendChild(PixiApp.view);
+
+function drawMap(map) {
+    PixiApp.stage.removeChildren(); // Clear the screen
+    var screenWidth = PixiApp.screen.width;
+    var screenHeight = PixiApp.screen.height;
     var width = map.width;
     var height = map.height;
     var scaler = Math.min(screenWidth / width, screenHeight / height);
@@ -25,13 +44,8 @@ function renderMap(map) {
             var invert = "invert" in edge ? edge.invert : false;
             var priority = "currentPriority" in edge ? edge.currentPriority : 1;
             var source, dest;
-            if (typeof edge.source == "number") {
-                source = vertices.find((v) => v.id == edge.source);
-                dest = vertices.find((v) => v.id == edge.dest);
-            } else {
-                source = edge.source;
-                dest = edge.dest;
-            }
+            source = vertices.find((v) => v.id == edge.source);
+            dest = vertices.find((v) => v.id == edge.dest);
             if (source == "undefined" || dest == "undefined") return;
             drawCurve(source.location, dest.location, invert, priority == 0, scaler, (edge.ctrlX == undefined || edge.ctrlY == undefined) ? undefined : new Point2D({ x: edge.ctrlX, y: edge.ctrlY }));
         }
@@ -39,9 +53,11 @@ function renderMap(map) {
     if (map.agents) {
         var agents = map.agents;
         agents.forEach(function (agent) {
-            renderAgent(agent.location.x, agent.location.y, scaler)
+            drawAgent(agent.location.x, agent.location.y, scaler)
         });
     }
+
+    PixiApp.render(); // Draw
 }
 
 function drawCurve(l1, l2, invert = false, disabled = false, scaler = 1, origin = undefined) {
@@ -52,12 +68,12 @@ function drawCurve(l1, l2, invert = false, disabled = false, scaler = 1, origin 
         curve.lineTo(l2.x * scaler, l2.y * scaler);
     } else {
         var path = new BezierCurve(new Point2D(l1), new Point2D(l2), invert, origin);
-        var p2 = path.startCtrl();
-        var p3 = path.endCtrl();
+        var p2 = path.getStartControlPoint();
+        var p3 = path.getEndControlPoint();
         curve.bezierCurveTo(p2.x * scaler, p2.y * scaler, p3.x * scaler, p3.y * scaler, l2.x * scaler, l2.y * scaler);
     }
 
-    app.stage.addChild(curve);
+    PixiApp.stage.addChild(curve);
 }
 
 function drawVertex(x, y, scaler = 1) {
@@ -67,17 +83,17 @@ function drawVertex(x, y, scaler = 1) {
     circle.endFill();
     circle.x = x * scaler;
     circle.y = y * scaler;
-    app.stage.addChild(circle);
+    PixiApp.stage.addChild(circle);
 }
 
-function renderAgent(x, y, scaler = 1) {
+function drawAgent(x, y, scaler = 1) {
     let circle = new PIXI.Graphics();
-    circle.beginFill(0xab385f);
+    circle.beginFill(Colours.accent);
     circle.drawCircle(0, 0, 4 * scaler);
     circle.endFill();
     circle.x = x * scaler;
     circle.y = y * scaler;
-    app.stage.addChild(circle);
+    PixiApp.stage.addChild(circle);
 }
 
-export { render as render }
+export { PixiApp as PixiApp, drawMap as drawMap, Colours as Colours }

@@ -11,11 +11,12 @@
         "noImplicitAny": false,
         "experimentalDecorators": true,
         "sourceMap": false,
-        "esModuleInterop": true
+        "esModuleInterop": true,
+        "jsx": "react"
     },
     "include": [
         "**/*.ts",
-        "../common/map_schema.ts",
-        "../common/math.ts"
+        "**/*.tsx",
+        "../common/*.ts"
     ]
 }

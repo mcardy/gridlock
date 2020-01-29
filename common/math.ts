@@ -49,6 +49,11 @@ export class BezierCurve {
     p4: Point2D;
     length: number;
 
+    startPoint: Point2D;
+    startControlPoint: Point2D;
+    endControlPoint: Point2D;
+    endPoint: Point2D;
+
     constructor(start: Point2D, end: Point2D, invert?: boolean, origin?: Point2D) {
         this.origin = origin != undefined ? origin : new Point2D({ x: invert ? end.x : start.x, y: invert ? start.y : end.y });
         this.p1 = new Point2D(start).minus(this.origin);
@@ -58,24 +63,32 @@ export class BezierCurve {
         var positive = theta > 0;
         this.p2 = new Point2D({ x: (positive ? -1 : 1) * this.p1.y, y: (positive ? 1 : -1) * this.p1.x }).times(L).plus(this.p1);
         this.p3 = new Point2D({ x: (positive ? 1 : -1) * this.p4.y, y: (positive ? -1 : 1) * this.p4.x }).times(L).plus(this.p4);
+        this.startPoint = this.p1.plus(this.origin);
+        this.startControlPoint = this.p2.plus(this.origin);
+        this.endControlPoint = this.p3.plus(this.origin);
+        this.endPoint = this.p4.plus(this.origin);
     }
 
-    public startPoint(): Point2D {
-        return this.p1.plus(this.origin);
+    public getStartPoint(): Point2D {
+        return this.startPoint;
     }
 
-    public startCtrl(): Point2D {
-        return this.p2.plus(this.origin);
+    public getStartControlPoint(): Point2D {
+        return this.startControlPoint;
     }
 
-    public endCtrl(): Point2D {
-        return this.p3.plus(this.origin);
+    public getEndControlPoint(): Point2D {
+        return this.endControlPoint;
     }
 
-    public endPoint(): Point2D {
-        return this.p4.plus(this.origin);
+    public getEndPoint(): Point2D {
+        return this.endPoint;
     }
 
-
+    public evaluate(t: number): Point2D {
+        var x = Math.pow(1 - t, 3) * this.startPoint.x + 3 * t * Math.pow(1 - t, 2) * this.startControlPoint.x + 3 * Math.pow(t, 2) * (1 - t) * this.endControlPoint.x + Math.pow(t, 3) * this.endPoint.x;
+        var y = Math.pow(1 - t, 3) * this.startPoint.y + 3 * t * Math.pow(1 - t, 2) * this.startControlPoint.y + 3 * Math.pow(t, 2) * (1 - t) * this.endControlPoint.y + Math.pow(t, 3) * this.endPoint.y;
+        return new Point2D({ x: x, y: y });
+    }
 
 }

@@ -1,5 +1,6 @@
-import { Agent, Vertex, Map, Edge, Intersection, EdgeIntersect } from '../map';
-import { Point2D } from '../../common/math';
+import { Vertex, Map, Edge, Intersection, EdgeIntersect } from '../map';
+import { Agent } from '../agent'
+import { Point2D, BezierCurve } from '../../common/math';
 import { Mutex } from '../mutex';
 import { Room, Delayed, Client } from 'colyseus';
 import { Random, MersenneTwister19937 } from 'random-js';
@@ -99,17 +100,17 @@ export class Simulation extends Room<SimulationState> {
     tickCounter: number;
     spawnRate: number = 5;
     tickRate: number = 100;
-    simulationSpeed: number = 1;
+    simulationSpeed: number = 0.25;
 
 
     onCreate(options) {
-        this.setState(new SimulationState());
-        console.log("BasicRoom created!", options);
+        console.log("Simulation room created!", options);
         this.processMap(JSON.stringify(testMap4));
-        this.setSimulationInterval((delta) => this.update(delta), 1000 / this.tickRate)
+        this.setSimulationInterval((delta) => this.update(delta), 1000 / (this.simulationSpeed * this.tickRate))
     }
 
     processMap(map) {
+        this.setState(new SimulationState());
         var mapObject = JSON.parse(map)
 
         this.random = new Random(MersenneTwister19937.seed(mapObject.seed))
@@ -154,22 +155,14 @@ export class Simulation extends Room<SimulationState> {
         }
         for (let i = 0; i < this.state.map.edges.length; i++) {
             var e1 = this.state.map.edges[i];
-            var p: Point2D = new Point2D(e1.source.location);
-            var r: Point2D = e1.dest.location.minus(p);
             for (let j = i + 1; j < this.state.map.edges.length; j++) {
                 var e2 = this.state.map.edges[j];
-                if (e2.source == e1.dest || e2.dest == e1.source || e1.source == e2.source) continue;
-                var q: Point2D = new Point2D(e2.source.location);
-                var s: Point2D = e2.dest.location.minus(q);
-                if (r.cross(s) != 0) {
-                    var t = q.minus(p).cross(s) / r.cross(s);
-                    var u = q.minus(p).cross(r) / r.cross(s);
-                    if (t >= 0 && t <= 1 && u >= 0 && u <= 1) {
-                        var ip = p.plus(r.times(t));
-                        var mutex = new Mutex<Agent>(); // The two intersection points share a mutex
-                        e1.intersectPoints.push(new EdgeIntersect({ edge: e2, point: ip, lock: mutex }));
-                        e2.intersectPoints.push(new EdgeIntersect({ edge: e1, point: ip, lock: mutex }));
-                    }
+
+                var ip = e1.calculateIntersection(e2);
+                if (intersection != undefined) {
+                    var mutex = new Mutex<Agent>(); // The two intersection points share a mutex, this will change...
+                    e1.intersectPoints.push(new EdgeIntersect({ edge: e2, point: ip, lock: mutex }));
+                    e2.intersectPoints.push(new EdgeIntersect({ edge: e1, point: ip, lock: mutex }));
                 }
             }
         }
@@ -184,7 +177,7 @@ export class Simulation extends Room<SimulationState> {
             }
             for (var i: number = 0; i < this.state.map.edges.length; i++) {
                 var edge = this.state.map.edges[i];
-                if (intersection.vertexIds.indexOf(edge.source.id) >= 0 && intersection.vertexIds.indexOf(edge.dest.id) >= 0) {
+                if (intersection.vertexIds.indexOf(edge.sourceVertex.id) >= 0 && intersection.vertexIds.indexOf(edge.destVertex.id) >= 0) {
                     intersection.edges.push(edge);
                     if (edge.priorities == undefined)
                         throw new Error("No priorities defined for edge as part of intersection...");
@@ -248,13 +241,15 @@ export class Simulation extends Room<SimulationState> {
             this.state.paused = true;
         } else if (data.command == 'unpause') {
             this.state.paused = false;
+        } else if (data.command == 'setmap') {
+            this.processMap(data.map);
         }
         //console.log("BasicRoom received message from", client.sessionId, ":", data);
         //this.broadcast(`(${client.sessionId}) ${data.message}`);
     }
 
     onDispose() {
-        console.log("Dispose BasicRoom");
+        console.log("Simulation room destroyed");
     }
 }
 
