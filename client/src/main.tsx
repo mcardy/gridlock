@@ -1,5 +1,5 @@
-import 'bootstrap/dist/css/bootstrap.min.css';
 import 'jsoneditor/dist/jsoneditor.min.css';
+import './../css/app.scss';
 import 'popper.js';
 import 'bootstrap';
 
@@ -11,7 +11,7 @@ import runMapEditor from './screen/mapeditorscreen';
 function start() {
     if (window.location.pathname == "/") {
         runSimulation();
-    } else if (/^\/map\/?$/.test(window.location.pathname)) {
+    } else if (/^\/map-editor\/?$/.test(window.location.pathname)) {
         runMapEditor();
     }
 }

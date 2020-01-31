@@ -1,13 +1,6 @@
 import * as PIXI from 'pixi.js'
 import { Point2D, BezierCurve } from '../../common/math'
-
-const Colours = {
-    primary: 0x061639,
-    secondary: 0xA9AABC,
-    tertiary: 0x757687,
-    emphasis: 0xA9AABC,
-    accent: 0xab385f//0x683236
-}
+import Colours from './util/style';
 
 let PixiApp = new PIXI.Application({
     width: 800,
@@ -21,7 +14,7 @@ let PixiApp = new PIXI.Application({
 PixiApp.renderer.view.style.position = "absolute";
 PixiApp.renderer.view.style.display = "block";
 
-PixiApp.renderer.backgroundColor = Colours.primary;
+PixiApp.renderer.backgroundColor = Colours.bgDark;
 
 PixiApp.renderer.resize(window.innerWidth, window.innerHeight);
 document.body.appendChild(PixiApp.view);
@@ -46,7 +39,7 @@ function drawMap(map) {
             var source, dest;
             source = vertices.find((v) => v.id == edge.source);
             dest = vertices.find((v) => v.id == edge.dest);
-            if (source == "undefined" || dest == "undefined") return;
+            if (source == undefined || dest == undefined) return;
             drawCurve(source.location, dest.location, invert, priority == 0, scaler, (edge.ctrlX == undefined || edge.ctrlY == undefined) ? undefined : new Point2D({ x: edge.ctrlX, y: edge.ctrlY }));
         }
     });
@@ -88,7 +81,7 @@ function drawVertex(x, y, scaler = 1) {
 
 function drawAgent(x, y, scaler = 1) {
     let circle = new PIXI.Graphics();
-    circle.beginFill(Colours.accent);
+    circle.beginFill(Colours.danger);
     circle.drawCircle(0, 0, 4 * scaler);
     circle.endFill();
     circle.x = x * scaler;

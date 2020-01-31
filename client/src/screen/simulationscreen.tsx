@@ -5,15 +5,18 @@ import * as Colyseus from "colyseus.js";
 import * as React from "react";
 import * as ReactDOM from "react-dom";
 
+import Button from 'react-bootstrap/Button';
+
 import uploadFile from '../util/upload';
 
 const menuWidth = 40;
 const menuWidthOpen = 400;
 
-class RightMenu extends React.Component<{ room: Colyseus.Room }, { open: boolean }> {
+class RightMenu extends React.Component<{ room: Colyseus.Room }, { open: boolean, simulationSpeed: number }> {
     constructor(props) {
         super(props);
-        this.state = { open: false };
+        console.log(this.props.room.state.simulationSpeed);
+        this.state = { open: false, simulationSpeed: this.props.room.state.simulationSpeed };
     }
 
     toggle() {
@@ -30,25 +33,28 @@ class RightMenu extends React.Component<{ room: Colyseus.Room }, { open: boolean
         this.props.room.send({ command: this.props.room.state.paused ? "unpause" : "pause" })
     }
 
-    render() {
-        var transform = "rotate(" + (this.state.open ? 90 : 0) + "deg)";
-        return (
-            <div style={{
-                position: "absolute", right: 0, width: (this.state.open ? menuWidthOpen : menuWidth) + "px", top: 0, height: "100%",
-                backgroundColor: "#" + Colours.secondary.toString(16), transition: "0.3s", overflow: "hidden"
-            }}>
-                <div style={{ height: "100%", backgroundColor: "#" + Colours.tertiary.toString(16), width: menuWidth }}>
-                    <button style={{
-                        color: "#" + Colours.accent.toString(16), backgroundColor: "transparent", border: "none", fontSize: (menuWidth - 10) + "px", transition: "0.3s",
-                        transform: transform, WebkitTransform: transform, MozTransformOrigin: transform, OTransform: transform, msTransform: transform,
-                        outline: "none"
-                    }}
-                        onClick={this.toggle.bind(this)}>&#9776;</button>
-                </div>
+    setSpeed(event) {
+        var speed = +event.target.value;
+        this.setState({ simulationSpeed: +speed });
+        this.props.room.send({ command: "setSimulationSpeed", speed: speed })
+    }
 
-                <div style={{ position: "relative", left: menuWidth, top: "-" + window.innerHeight + "px", width: menuWidthOpen - menuWidth, padding: "10px" }}>
-                    <button className="btn btn-secondary btn-block" onClick={this.uploadMap.bind(this)}>Upload Map</button>
-                    <button className="btn btn-secondary btn-block" onClick={this.pause.bind(this)}>Pause/Unpause</button>
+    render() {
+        return (
+            <div className={"sidebar-menu" + (this.state.open ? " open" : "")}>
+                <div className="sidebar-menu-bar">
+                    <button className="sidebar-menu-toggle" onClick={this.toggle.bind(this)}>&#9776;</button>
+                </div>
+                <div className="sidebar-menu-content">
+                    <Button variant="secondary" block onClick={this.uploadMap.bind(this)}>Upload Map</Button>
+                    <Button variant="secondary" block onClick={this.pause.bind(this)}>Pause/Unpause</Button>
+                    <hr></hr>
+                    <div className="form-group">
+                        <label>Set Simulation Speed</label>
+                        <input type="range" className="custom-range" min="0.125" max="4" step="0.125" value={this.state.simulationSpeed} onChange={this.setSpeed.bind(this)} />
+                    </div>
+
+                    <a className="btn btn-secondary" role="button" href="/map-editor/" target="_blank" style={{ position: "absolute", bottom: 10, width: "calc(100% - 20px)" }}>Open Map Editor</a>
                 </div>
             </div>
         );
@@ -61,18 +67,18 @@ export default function runSimulation() {
     var client = new Colyseus.Client(location.protocol.replace("http", "ws") + "//" + host + (location.port ? ':' + location.port : ''));
     client.joinOrCreate("simulation").then(room => {
 
-        room.onStateChange.once(function (state) {
+        room.onStateChange.once(function (state: any) {
             console.log("initial room state:", state);
-            drawMap(state["map"]);
+            ReactDOM.render(<RightMenu room={room}></RightMenu>, document.getElementById("root"))
+            if (state.map.width) drawMap(state.map);
         });
 
-        room.onStateChange(function (state) {
-            drawMap(state["map"]);
+        room.onStateChange(function (state: any) {
+            if (state.map.width) drawMap(state.map);
         });
 
         room.onMessage(function (message) {
         });
 
-        ReactDOM.render(<RightMenu room={room}></RightMenu>, document.getElementById("root"))
     });
 }

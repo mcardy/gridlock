@@ -11,8 +11,9 @@ var HOST = config.host;
 var app = express();
 app.use("/dist", express.static(__dirname + "/client/dist"));
 
-var paths = ["/", "/map/"]
 
+// Serve the display
+var paths = ["/", "/map-editor/"]
 app.get(paths, (request, response) => {
   response.sendFile(__dirname + "/client/html/index.html")
 });

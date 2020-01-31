@@ -93,24 +93,28 @@ class SimulationState extends Schema {
     map: Map;
     @type('boolean')
     paused: boolean = true;
+    @type('number')
+    simulationSpeed: number = 0.25;
 }
 
 export class Simulation extends Room<SimulationState> {
-    random: Random;
-    tickCounter: number;
+    random: Random; // Random created for each map, server side property
+    tickCounter: number; // Number of ticks that have passed, server side property
+
+    // Constant tick rate
+    readonly tickRate: number = 100;
     spawnRate: number = 5;
-    tickRate: number = 100;
-    simulationSpeed: number = 0.25;
 
 
     onCreate(options) {
         console.log("Simulation room created!", options);
-        this.processMap(JSON.stringify(testMap4));
-        this.setSimulationInterval((delta) => this.update(delta), 1000 / (this.simulationSpeed * this.tickRate))
+        this.setState(new SimulationState());
+        //this.processMap(JSON.stringify(testMap4));
+        this.setSimulationInterval((delta) => this.update(delta), 1000 / (this.state.simulationSpeed * this.tickRate));
     }
 
     processMap(map) {
-        this.setState(new SimulationState());
+        this.state.paused = true;
         var mapObject = JSON.parse(map)
 
         this.random = new Random(MersenneTwister19937.seed(mapObject.seed))
@@ -159,7 +163,7 @@ export class Simulation extends Room<SimulationState> {
                 var e2 = this.state.map.edges[j];
 
                 var ip = e1.calculateIntersection(e2);
-                if (intersection != undefined) {
+                if (ip != undefined) {
                     var mutex = new Mutex<Agent>(); // The two intersection points share a mutex, this will change...
                     e1.intersectPoints.push(new EdgeIntersect({ edge: e2, point: ip, lock: mutex }));
                     e2.intersectPoints.push(new EdgeIntersect({ edge: e1, point: ip, lock: mutex }));
@@ -188,7 +192,7 @@ export class Simulation extends Room<SimulationState> {
             }
             this.state.map.intersections.push(intersection);
         }
-        this.state.paused = false;
+        //this.state.paused = false;
     }
 
     update(delta) {
@@ -238,14 +242,15 @@ export class Simulation extends Room<SimulationState> {
 
     onMessage(client, data) {
         if (data.command == 'pause') {
-            this.state.paused = true;
+            this.state.paused = true && this.state.map.agents != undefined;
         } else if (data.command == 'unpause') {
             this.state.paused = false;
         } else if (data.command == 'setmap') {
             this.processMap(data.map);
+        } else if (data.command = 'setSimulationSpeed') {
+            this.state.simulationSpeed = +data.speed;
+            this.setSimulationInterval((delta) => this.update(delta), 1000 / (this.state.simulationSpeed * this.tickRate));
         }
-        //console.log("BasicRoom received message from", client.sessionId, ":", data);
-        //this.broadcast(`(${client.sessionId}) ${data.message}`);
     }
 
     onDispose() {

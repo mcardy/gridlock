@@ -1,0 +1,81 @@
+$primary: #9966FF;
+$secondary: #717A8E;
+$success: #9BC995;
+$info: #6CCFF6;
+$warning: #EDAE49;
+$danger: #AB385F;
+$bg-dark: #061639;
+$bg-light: #E8EEF2;
+
+$menuWidth: 40;
+$menuWidthOpen: 400;
+
+$theme-colors: (
+    primary: $primary,
+    secondary: $secondary,
+    success: $success,
+    info: $info,
+    warning: $warning,
+    danger: $danger,
+    bg-dark: $bg-dark,
+    bg-light: $bg-light
+);
+
+@import "node_modules/bootstrap/scss/bootstrap";
+
+// Overwrites for json editor
+.jsoneditor {
+    border: none;
+}
+
+.jsoneditor-menu {
+    background-color: $primary;
+    border-bottom: none;
+}
+
+.sidebar-menu {
+    height: 100%;
+    width: $menuWidth + px;
+
+    position: absolute;
+    right: 0;
+    top: 0;
+    
+    background-color: #d3d9dd;
+    transition: 0.3s;
+    overflow: hidden;
+
+    .sidebar-menu-bar {
+        height: 100%;
+        background-color: $bg-light;
+        width: $menuWidth + px;
+        box-shadow: 0px 0px 4px;
+    }
+
+    .sidebar-menu-toggle {
+        color: $danger;
+        background-color: transparent;
+        font-size: ($menuWidth - 10) + px;
+        transition: 0.3s;
+        outline: none;
+        border: 0;
+    }
+
+    .sidebar-menu-content {
+        position: absolute;
+        right: $menuWidth - $menuWidthOpen + px;
+        top: 0;
+        width: $menuWidthOpen - $menuWidth + px;
+        padding: 10px;
+        transition: 0.3s;
+        height: 100%; 
+    }
+}
+
+.sidebar-menu.open {
+    width: $menuWidthOpen + px;
+
+    .sidebar-menu-content {
+        right: 0;
+    }
+}
