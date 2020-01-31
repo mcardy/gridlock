@@ -40,9 +40,9 @@ export class Edge extends Schema {
     @type(['number'])
     readonly priorities: number[]
     @type('number')
-    readonly ctrlX;
+    readonly ctrlX: number = undefined;
     @type('number')
-    readonly ctrlY;
+    readonly ctrlY: number = undefined;
 
     readonly sourceVertex: Vertex
     readonly destVertex: Vertex
@@ -80,7 +80,11 @@ export class Edge extends Schema {
 
     public connectsWith(edge: Edge): boolean {
         if (edge == undefined) return false;
-        return this == edge || this.destVertex == edge.sourceVertex;
+        return this == edge || this.destVertex == edge.sourceVertex || this.sourceVertex == edge.sourceVertex;
+    }
+
+    public getControlPoint(): Point2D {
+        return this.ctrlX != undefined && this.ctrlY != undefined ? new Point2D({ x: this.ctrlX, y: this.ctrlY }) : undefined;
     }
 
     public calculateIntersection(edge: Edge): Point2D {
@@ -98,10 +102,10 @@ export class Edge extends Schema {
                 if (this.isLinear() && edge.isLinear()) {
                     return p.plus(r.times(t));
                 } else if (this.isLinear() || edge.isLinear()) {
+                    console.log("Intersection detected");
                     var linearEdge = this.isLinear() ? this : edge;
                     var bezierEdge = linearEdge == this ? edge : this;
-                    var bezierPath = new BezierCurve(new Point2D(bezierEdge.sourceVertex.location), new Point2D(bezierEdge.destVertex.location), bezierEdge.invert,
-                        bezierEdge.ctrlX != undefined && bezierEdge.ctrlY != undefined ? new Point2D({ x: bezierEdge.ctrlX, y: bezierEdge.ctrlY }) : undefined);
+                    var bezierPath = new BezierCurve(new Point2D(bezierEdge.sourceVertex.location), new Point2D(bezierEdge.destVertex.location), bezierEdge.invert, bezierEdge.getControlPoint());
                     var bezierInterval = 0.5;
                     var p = new Point2D(linearEdge.sourceVertex.location);
                     var r = new Point2D(linearEdge.destVertex.location.minus(p));
@@ -130,10 +134,9 @@ export class Edge extends Schema {
                         }
                     }
                     var ip = bezierPath.evaluate(bezierInterval);
-                    console.log("(" + this.sourceVertex.id + "=>" + this.destVertex.id + ") intersects with (" + edge.sourceVertex.id + "=>" + edge.destVertex.id + ") at " + JSON.stringify(ip));
                     return ip;
                 } else {
-                    console.log("HAVE NOT YET IMPLEMENTED BEZIER CURVE INTERSECTIONS");
+                    //console.log("HAVE NOT YET IMPLEMENTED BEZIER CURVE INTERSECTIONS");
                     return undefined;
                 }
             }
@@ -141,35 +144,21 @@ export class Edge extends Schema {
     }
 
     private calculateLength(): number { // TODO expand to 3d bezier curve
-        var p0: Point2D = new Point2D(this.sourceVertex.location);
-        var p2: Point2D = new Point2D(this.destVertex.location);
-        if (p0.x == p2.x) {
-            return Math.abs(p0.y - p2.y);
-        } else if (p0.y == p2.y) {
-            return Math.abs(p0.x - p2.x);
+        var source: Point2D = new Point2D(this.sourceVertex.location);
+        var dest: Point2D = new Point2D(this.destVertex.location);
+        if (source.x == dest.x || source.y == dest.y) {
+            return source.distance(dest);
         } else {
-
-            var p1 = new Point2D({ x: this.invert ? p0.x : p2.x, y: this.invert ? p2.y : p0.y })
-            var a = new Point2D();
-            var b = new Point2D();
-            a.x = p0.x - 2 * p1.x + p2.x;
-            a.y = p0.y - 2 * p1.y + p2.y;
-            b.x = 2 * p1.x - 2 * p0.x;
-            b.y = 2 * p1.y - 2 * p0.y;
-            var A = 4 * (a.x * a.x + a.y * a.y);
-            var B = 4 * (a.x * b.x + a.y * b.y);
-            var C = b.x * b.x + b.y * b.y;
-
-            var Sabc = 2 * Math.sqrt(A + B + C);
-            var A_2 = Math.sqrt(A);
-            var A_32 = 2 * A * A_2;
-            var C_2 = 2 * Math.sqrt(C);
-            var BA = B / A_2;
-
-            return (A_32 * Sabc +
-                A_2 * B * (Sabc - C_2) +
-                (4 * C * A - B * B) * Math.log((2 * A_2 + BA + Sabc) / (BA + C_2))
-            ) / (4 * A_32);
+            var step = 0.01;
+            var distance = 0;
+            var bezierCurve = new BezierCurve(source, dest, this.invert, this.getControlPoint());
+            var lastPoint = source;
+            for (var t = step; t <= 1; t += step) {
+                var nextPoint = bezierCurve.evaluate(t);
+                distance += lastPoint.distance(nextPoint);
+                lastPoint = nextPoint;
+            }
+            return distance;
         }
     }
 
