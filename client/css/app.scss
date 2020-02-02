@@ -25,12 +25,12 @@ $theme-colors: (
 
 // Overwrites for json editor
 .jsoneditor {
-    border: none;
+    border: none !important;
 }
 
 .jsoneditor-menu {
-    background-color: $primary;
-    border-bottom: none;
+    background-color: $primary !important;
+    border-bottom: none !important;
 }
 
 .sidebar-menu {

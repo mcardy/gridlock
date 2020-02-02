@@ -102,7 +102,6 @@ export class Edge extends Schema {
                 if (this.isLinear() && edge.isLinear()) {
                     return p.plus(r.times(t));
                 } else if (this.isLinear() || edge.isLinear()) {
-                    console.log("Intersection detected");
                     var linearEdge = this.isLinear() ? this : edge;
                     var bezierEdge = linearEdge == this ? edge : this;
                     var bezierPath = new BezierCurve(new Point2D(bezierEdge.sourceVertex.location), new Point2D(bezierEdge.destVertex.location), bezierEdge.invert, bezierEdge.getControlPoint());
