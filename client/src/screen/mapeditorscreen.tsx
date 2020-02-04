@@ -142,7 +142,7 @@ class MapEditor extends React.Component<{ app: Display }, { json: any, loading: 
         return (
             <div>
                 <div style={{ position: "absolute", left: window.innerWidth / 2, top: 0, width: window.innerWidth / 2, height: window.innerHeight - buttonHeight }}>
-                    <JsonEditor schema={map_schema} ajv={new Ajv()} value={this.state.json} allowedModes={["tree", "text", "code"]} ace={ace}
+                    <JsonEditor schema={map_schema} ajv={new Ajv()} value={this.state.json} allowedModes={["tree", "text", "code"]} ace={ace} history={true}
                         ref={this.setEditorReference.bind(this)} onChange={this.handleEditorChange.bind(this)}></JsonEditor>
                 </div>
                 <MapEditorButton onClick={this.renderMap.bind(this)} height={buttonHeight} width={window.innerWidth / 4} top={topPositioning} left={window.innerWidth / 2} text="Show Map" type="primary" />

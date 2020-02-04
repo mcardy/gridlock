@@ -32,7 +32,7 @@ class Display {
         document.body.appendChild(this.PixiApp.view);
     }
 
-    drawMap(map): void {
+    public drawMap(map): void {
         this.map = map;
         this.PixiApp.stage.removeChildren(); // Clear the screen
         var screenWidth = this.PixiApp.screen.width;
@@ -67,51 +67,53 @@ class Display {
         let overlay = new PIXI.Graphics();
         overlay.interactive = true;
         overlay.hitArea = new PIXI.Rectangle(0, 0, screenWidth, screenHeight);
-        overlay.on('click', e => {
-            var previousEdge = this.selectedEdge;
-            var previousVertex = this.selectedVertex;
-            var click = new Point2D(this.PixiApp.renderer.plugins.interaction.mouse.global);
-            for (var child of this.PixiApp.stage.children) {
-                if (child.hitArea != undefined) {
-                    if (child.hitArea.contains(click.x, click.y)) {
-                        var listener = child.listeners('customclick')[0];
-                        if (listener && listener()) {
-                            break;
-                        }
-                    }
-                }
-            }
-            var redraw = false;
-            if (this.selectedEdge != undefined) {
-                if (this.selectedEdge == previousEdge) {
-                    this.selectedEdge = undefined;
-                } else if (this.edgeCallback != undefined) {
-                    this.edgeCallback(this.selectedEdge.sourceId, this.selectedEdge.destId);
-                }
-                redraw = true;
-            }
-            if (this.selectedVertex != undefined) {
-                if (this.selectedVertex == previousVertex) {
-                    this.selectedVertex = undefined;
-                } else if (this.vertexCallback != undefined) {
-                    this.vertexCallback(this.selectedVertex.id);
-                }
-                redraw = true;
-            }
-            if (redraw) {
-                this.drawMap(this.map);
-            }
-        })
+        overlay.on('click', this.onClick.bind(this));
         this.PixiApp.stage.addChild(overlay);
 
         this.PixiApp.render(); // Draw
     }
 
-    public setEdgeSelectCallback(fn: (source: number, dest: number) => void) {
+    private onClick(event) {
+        var previousEdge = this.selectedEdge;
+        var previousVertex = this.selectedVertex;
+        var click = new Point2D(this.PixiApp.renderer.plugins.interaction.mouse.global);
+        for (var child of this.PixiApp.stage.children) {
+            if (child.hitArea != undefined) {
+                if (child.hitArea.contains(click.x, click.y)) {
+                    var listener = child.listeners('customclick')[0];
+                    if (listener && listener()) {
+                        break;
+                    }
+                }
+            }
+        }
+        var redraw = false;
+        if (this.selectedEdge != undefined) {
+            if (this.selectedEdge == previousEdge) {
+                this.selectedEdge = undefined;
+            } else if (this.edgeCallback != undefined) {
+                this.edgeCallback(this.selectedEdge.sourceId, this.selectedEdge.destId);
+            }
+            redraw = true;
+        }
+        if (this.selectedVertex != undefined) {
+            if (this.selectedVertex == previousVertex) {
+                this.selectedVertex = undefined;
+            } else if (this.vertexCallback != undefined) {
+                this.vertexCallback(this.selectedVertex.id);
+            }
+            redraw = true;
+        }
+        if (redraw) {
+            this.drawMap(this.map);
+        }
+    }
+
+    public setEdgeSelectCallback(fn: (source: number, dest: number) => void): void {
         this.edgeCallback = fn;
     }
 
-    public setVertexSelectCallback(fn: (id: number) => void) {
+    public setVertexSelectCallback(fn: (id: number) => void): void {
         this.vertexCallback = fn;
     }
 
