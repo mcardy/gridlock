@@ -16,7 +16,6 @@ const menuWidth = 40;
 class SimulationMenu extends React.Component<{ room: Colyseus.Room }, { open: boolean, simulationSpeed: number, showSelectMapModal: boolean, loading: boolean }> {
     constructor(props) {
         super(props);
-        console.log(this.props.room.state.simulationSpeed);
         this.state = { open: false, simulationSpeed: this.props.room.state.simulationSpeed, showSelectMapModal: false, loading: false };
     }
 

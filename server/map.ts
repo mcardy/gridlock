@@ -145,7 +145,7 @@ export class Edge extends Schema {
     private calculateLength(): number { // TODO expand to 3d bezier curve
         var source: Point2D = new Point2D(this.sourceVertex.location);
         var dest: Point2D = new Point2D(this.destVertex.location);
-        if (source.x == dest.x || source.y == dest.y) {
+        if ((source.x == dest.x || source.y == dest.y) && this.getControlPoint() == undefined) {
             return source.distance(dest);
         } else {
             var step = 0.01;
@@ -215,6 +215,7 @@ export class Map extends Schema {
         while (next.length != 0) {
             var current = next.splice(0, 1)[0];
             if (visited.indexOf(current) >= 0) continue;
+            visited.push(current);
             if (current.dest) destinations.push(current);
             if (current.id in adjacencyList) {
                 let edge: Edge;
@@ -242,6 +243,7 @@ export class Map extends Schema {
         while (next.length != 0) {
             var current = next.splice(0, 1)[0];
             if (visited.indexOf(current.node) >= 0) continue;
+            visited.push(current.node);
             if (current.node == dest) {
                 var path: Edge[] = new ArraySchema<Edge>();
                 var parent: TraceableVertex = current;

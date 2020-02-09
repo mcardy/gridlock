@@ -10,14 +10,22 @@ import Col from 'react-bootstrap/Col';
 import uploadFile from '../../util/upload';
 import LoadingOverlay from './loadingoverlay';
 
-export default class MapSelect extends React.Component<{ show: boolean, toggleShow: () => void, processMap: (data: any, name?: string) => void }, { maps: string[], selectedMap: string, loading: boolean }> {
+export default class MapSelect extends React.Component<{ show: boolean, toggleShow: () => void, processMap: (data: any, name?: string) => void }, { maps: string[], selectedMap: string, loading: boolean, isShown: boolean }> {
 
     constructor(props) {
         super(props);
-        this.state = { maps: [], selectedMap: "", loading: true }
+        this.state = { maps: [], selectedMap: "", loading: false, isShown: this.props.show }
+    }
+
+    updateMaps() {
         var that = this;
-        $.get("/maps", function (data) {
-            that.setState({ maps: data, loading: false, selectedMap: data[0] })
+        $.ajax({
+            url: "/maps",
+            type: "get",
+            async: false,
+            success: function (data) {
+                that.setState({ maps: data, loading: false, selectedMap: data[0] })
+            }
         });
     }
 
@@ -52,15 +60,23 @@ export default class MapSelect extends React.Component<{ show: boolean, toggleSh
 
 
     setMap() {
+        this.setState({ loading: true })
         var that = this;
         var name = this.state.selectedMap;
         $.get("/maps/" + this.state.selectedMap, function (data) {
             that.props.processMap(data, name);
             that.props.toggleShow();
+            that.setState({ loading: false });
         });
     }
 
     render() {
+        if (this.props.show != this.state.isShown) {
+            if (this.props.show) {
+                this.updateMaps();
+            }
+            this.setState({ isShown: this.props.show })
+        }
         let maps = [];
         for (var map of this.state.maps) {
             maps.push(<option>{map}</option>);

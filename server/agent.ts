@@ -58,7 +58,7 @@ export class Agent extends Schema {
                     if (this.edge.currentPriority >= agent.edge.currentPriority) continue;
                     var dA = this.location.distance(this.edge.destVertex.location);
                     var dB = agent.location.distance(this.edge.destVertex.location);
-                    if (dB <= 20 && dA <= 20 && dA >= 10) return;
+                    if (dB <= 30 && dA <= 20 && dA >= 10) return;
                 } else { // Crossing traffic
                     if (this.edge.currentPriority >= agent.edge.currentPriority) continue;
                     var edgeIntersect = this.edge.intersectsWith(agent.edge);
@@ -92,10 +92,10 @@ export class Agent extends Schema {
 
         var l1 = this.edge.sourceVertex.location;
         var l2 = this.edge.destVertex.location;
-        if (l1.x == l2.x) {
+        if (l1.x == l2.x && this.edge.getControlPoint() == undefined) {
             // Linear in x
             this.location.y += (l1.y < l2.y ? 1 : -1) * this.speed;
-        } else if (l1.y == l2.y) {
+        } else if (l1.y == l2.y && this.edge.getControlPoint() == undefined) {
             // Linear in y
             this.location.x += (l1.x < l2.x ? 1 : -1) * this.speed;
         } else {

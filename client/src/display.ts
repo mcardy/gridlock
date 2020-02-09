@@ -10,8 +10,14 @@ class Display {
     private selectedEdge: { sourceId: number, destId: number };
     private selectedVertex: { id: number }
 
-    private edgeCallback: (source: number, dest: number) => void;
-    private vertexCallback: (id: number) => void;
+    public edgeCallback: (source: number, dest: number) => void;
+    public vertexCallback: (id: number) => void;
+
+    private clickables: PIXI.DisplayObject[];
+
+    private edgeContainer: PIXI.Container;
+    private vertexContainer: PIXI.Container;
+    private agentContainer: PIXI.Container;
 
     constructor() {
         this.PixiApp = new PIXI.Application({
@@ -30,21 +36,40 @@ class Display {
 
         this.PixiApp.renderer.resize(window.innerWidth, window.innerHeight);
         document.body.appendChild(this.PixiApp.view);
+
+        this.edgeContainer = new PIXI.Container();
+        this.vertexContainer = new PIXI.Container();
+        this.agentContainer = new PIXI.Container();
+
+        this.PixiApp.stage.addChild(this.edgeContainer, this.vertexContainer, this.agentContainer);
+
+        let overlay = new PIXI.Graphics();
+        overlay.interactive = true;
+        overlay.hitArea = new PIXI.Rectangle(0, 0, this.PixiApp.screen.width, this.PixiApp.screen.height);
+        overlay.on('click', this.onClick.bind(this));
+        this.PixiApp.stage.addChild(overlay);
     }
 
     public drawMap(map): void {
         this.map = map;
-        this.PixiApp.stage.removeChildren(); // Clear the screen
         var screenWidth = this.PixiApp.screen.width;
         var screenHeight = this.PixiApp.screen.height;
         var width = map.width;
         var height = map.height;
         var scaler = Math.min(screenWidth / width, screenHeight / height);
+        var clickables: PIXI.DisplayObject[] = [];
 
         var vertices = map.vertices;
         var edges = map.edges;
+
+        this.vertexContainer.removeChildren();
+        this.edgeContainer.removeChildren();
+        this.agentContainer.removeChildren();
+
         for (let vertex of vertices) {
-            this.drawVertex(vertex.id, vertex.location.x, vertex.location.y, scaler);
+            let child = this.drawVertex(vertex.id, vertex.location.x, vertex.location.y, scaler);
+            this.edgeContainer.addChild(child);
+            clickables.push(child);
         }
         for (let edge of edges) {
             if (edge.source != NaN && edge.dest != NaN) {
@@ -54,21 +79,21 @@ class Display {
                 source = vertices.find((v) => v.id == edge.source);
                 dest = vertices.find((v) => v.id == edge.dest);
                 if (source == undefined || dest == undefined) return;
-                this.drawCurve(source, dest, invert, priority == 0, scaler, (edge.ctrlX == undefined || edge.ctrlY == undefined) ? undefined : new Point2D({ x: edge.ctrlX, y: edge.ctrlY }));
+                let child = this.drawCurve(source, dest, invert, priority == 0, scaler, (edge.ctrlX == undefined || edge.ctrlY == undefined) ? undefined : new Point2D({ x: edge.ctrlX, y: edge.ctrlY }));
+                this.edgeContainer.addChild(child);
+                clickables.push(child);
             }
         }
         if (map.agents) {
             var agents = map.agents;
             for (let agent of agents) {
-                this.drawAgent(agent.location.x, agent.location.y, scaler)
+                let child = this.drawAgent(agent.location.x, agent.location.y, scaler);
+                this.agentContainer.addChild(child);
+                clickables.push(child);
             }
         }
 
-        let overlay = new PIXI.Graphics();
-        overlay.interactive = true;
-        overlay.hitArea = new PIXI.Rectangle(0, 0, screenWidth, screenHeight);
-        overlay.on('click', this.onClick.bind(this));
-        this.PixiApp.stage.addChild(overlay);
+        this.clickables = clickables;
 
         this.PixiApp.render(); // Draw
     }
@@ -77,7 +102,7 @@ class Display {
         var previousEdge = this.selectedEdge;
         var previousVertex = this.selectedVertex;
         var click = new Point2D(this.PixiApp.renderer.plugins.interaction.mouse.global);
-        for (var child of this.PixiApp.stage.children) {
+        for (var child of this.clickables) {
             if (child.hitArea != undefined) {
                 if (child.hitArea.contains(click.x, click.y)) {
                     var listener = child.listeners('customclick')[0];
@@ -117,6 +142,14 @@ class Display {
         this.vertexCallback = fn;
     }
 
+    public getSelectedEdge(): { sourceId: number, destId: number } {
+        return this.selectedEdge;
+    }
+
+    public getSelectedVertex(): { id: number } {
+        return this.selectedVertex;
+    }
+
     private isSelectedEdge(source: number, dest: number): boolean {
         return this.selectedEdge != undefined && this.selectedEdge.sourceId == source && this.selectedEdge.destId == dest;
     }
@@ -133,13 +166,13 @@ class Display {
         this.selectedVertex = { id: id };
     }
 
-    private drawCurve(source, dest, invert = false, disabled = false, scaler = 1, origin = undefined) {
+    private drawCurve(source, dest, invert = false, disabled = false, scaler = 1, origin = undefined): PIXI.DisplayObject {
         var l1 = source.location;
         var l2 = dest.location;
         let curve = new PIXI.Graphics();
         curve.lineStyle(4, !disabled ? 0xFFFFFF : 0xFF0000, this.isSelectedEdge(source.id, dest.id) ? 1 : 0.5);
         curve.moveTo(l1.x * scaler, l1.y * scaler);
-        if (l1.x == l2.x || l1.y == l2.y) {
+        if ((l1.x == l2.x || l1.y == l2.y) && origin == undefined) {
             curve.lineTo(l2.x * scaler, l2.y * scaler);
             curve.hitArea = curve.getBounds();
             curve.on('customclick', () => {
@@ -163,8 +196,7 @@ class Display {
                 return false;
             });
         }
-
-        this.PixiApp.stage.addChild(curve);
+        return curve;
     }
 
     private drawVertex(id, x, y, scaler = 1) {
@@ -179,7 +211,7 @@ class Display {
             this.setSelectedVertex(id);
             return true;
         })
-        this.PixiApp.stage.addChild(circle);
+        return circle;
     }
 
     private drawAgent(x, y, scaler = 1) {
@@ -189,7 +221,7 @@ class Display {
         circle.endFill();
         circle.x = x * scaler;
         circle.y = y * scaler;
-        this.PixiApp.stage.addChild(circle);
+        return circle;
     }
 
 }

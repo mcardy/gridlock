@@ -1,6 +1,5 @@
 import { display, Display } from './../display';
 import { map_schema } from '../../../common/map_schema';
-import uploadFile from '../util/upload';
 
 import * as React from "react";
 import * as ReactDOM from "react-dom";
@@ -14,6 +13,7 @@ import ace from 'brace';
 
 import LoadingOverlay from './components/loadingoverlay';
 import MapSelect from './components/mapselect';
+import GetStringModal from './components/getstring';
 
 import JSONEditor from 'jsoneditor';
 
@@ -44,43 +44,108 @@ class MapEditorButton extends React.Component<MapEditorButtonProperties, {}> {
     }
 }
 
-class MapEditor extends React.Component<{ app: Display }, { json: any, loading: boolean, mapSelectModal: boolean, mapName: string }> {
+class MapEditor extends React.Component<{ app: Display }, { json: any, loading: boolean, mapSelectModal: boolean, mapName: string, saveAsModal: boolean }> {
 
     editorReference: { jsonEditor: JSONEditor };
 
     constructor(props) {
         super(props);
-        this.state = { json: {}, loading: false, mapSelectModal: false, mapName: undefined };
-        display.setEdgeSelectCallback((source, dest) => {
-            var json = this.editorReference.jsonEditor.get();
-            if (!("edges" in json)) return;
-            var index = -1;
-            for (var i = 0; i < json.edges.length; i++) {
-                if (json.edges[i].source == source && json.edges[i].dest == dest) {
-                    index = i;
-                    break;
-                }
-            }
-            if (index >= 0) {
-                var path = { path: ["edges", index] };
-                this.editorReference.jsonEditor.setSelection(path, path);
+        this.state = { json: { width: 600, height: 400, vertices: [], edges: [] }, loading: false, mapSelectModal: false, mapName: undefined, saveAsModal: false };
+        display.setEdgeSelectCallback(this.selectEdge.bind(this));
+        display.setVertexSelectCallback(this.selectVertex.bind(this));
+        window.addEventListener("keydown", (event) => {
+
+            if (display.getSelectedVertex() != undefined) {
+                this.vertexKeyBinding(event);
+            } else if (display.getSelectedEdge() != undefined) {
+                this.edgeKeyBinding(event);
             }
         });
-        display.setVertexSelectCallback((id) => {
-            var json = this.editorReference.jsonEditor.get();
-            if (!("vertices" in json)) return;
-            var index = -1;
-            for (var i = 0; i < json.vertices.length; i++) {
-                if (json.vertices[i].id == id) {
-                    index = i;
-                    break;
+        this.renderMap();
+    }
+
+    vertexKeyBinding(event: KeyboardEvent) {
+        var id = display.getSelectedVertex().id;
+        var vertex = this.findVertex(id);
+        if (vertex.index < 0) return;
+        var json = this.editorReference.jsonEditor.get();
+        switch (event.key) {
+            case "ArrowDown":
+            case "ArrowLeft":
+            case "ArrowRight":
+            case "ArrowUp":
+                var offsets = { "ArrowDown": [0, 1], "ArrowLeft": [-1, 0], "ArrowRight": [1, 0], "ArrowUp": [0, -1] }[event.key];
+                vertex.value.location.x += offsets[0];
+                vertex.value.location.y += offsets[1];
+                json.vertices[vertex.index] = vertex.value;
+                this.updateJson(json);
+                this.selectVertex(id);
+                break;
+            case "Delete":
+                var toRemove = [];
+                for (var i = 0; i < json.edges.length; i++) {
+                    if (json.edges[i].source == id || json.edges[i].dest == id) {
+                        toRemove.push(i);
+                    }
                 }
+                for (var i = 0; i < toRemove.length; i++) {
+                    json.edges.splice(toRemove[i] - i, 1);
+                }
+                json.vertices.splice(vertex.index, 1);
+                this.updateJson(json);
+                break;
+        }
+    }
+
+    edgeKeyBinding(event: KeyboardEvent) {
+        var selected = display.getSelectedEdge();
+        var edge = this.findEdge(selected.sourceId, selected.destId);
+        if (edge.index < 0) return;
+        var json = this.editorReference.jsonEditor.get();
+        switch (event.key) {
+            case "Delete":
+                json.edges.splice(edge.index, 1);
+                this.updateJson(json);
+                break;
+        }
+    }
+
+    selectVertex(id: number) {
+        var vertex = this.findVertex(id);
+        if (vertex.index >= 0) {
+            var path = { path: ["vertices", vertex.index] };
+            this.editorReference.jsonEditor.setSelection(path, path);
+        }
+    }
+
+    findVertex(id: number): { index: number, value: any } {
+        var json = this.editorReference.jsonEditor.get();
+        if (!("vertices" in json)) return;
+        for (var i = 0; i < json.vertices.length; i++) {
+            if (json.vertices[i].id == id) {
+                return { index: i, value: json.vertices[i] };
             }
-            if (index >= 0) {
-                var path = { path: ["vertices", index] };
-                this.editorReference.jsonEditor.setSelection(path, path);
+        }
+        return { index: -1, value: undefined };
+    }
+
+    selectEdge(source: number, dest: number) {
+        var edge = this.findEdge(source, dest);
+        if (edge.index >= 0) {
+            var path = { path: ["edges", edge.index] };
+            this.editorReference.jsonEditor.setSelection(path, path);
+        }
+    }
+
+    findEdge(source: number, dest: number): { index: number, value: any } {
+        var json = this.editorReference.jsonEditor.get();
+        if (!("edges" in json)) return;
+        for (var i = 0; i < json.edges.length; i++) {
+            if (json.edges[i].source == source && json.edges[i].dest == dest) {
+                return { index: i, value: json.edges[i] };
             }
-        });
+        }
+        return { index: -1, value: undefined };
     }
 
     renderMap() {
@@ -89,32 +154,44 @@ class MapEditor extends React.Component<{ app: Display }, { json: any, loading: 
 
     saveMap() {
         if (this.state.mapName != undefined) {
-            this.setState({ loading: true });
-            var that = this;
-            $.ajax({
-                type: "POST",
-                url: "/maps/" + that.state.mapName,
-                data: JSON.stringify(that.editorReference.jsonEditor.get()),
-                contentType: "application/json",
-                success: function (response) {
-                    that.setState({ loading: false });
-                },
-                error: function (err) {
-                    console.log(err);
-                    that.setState({ loading: false });
-                    alert("Error saving map: " + err.statusText);
-                }
-            })
+            this.saveFile(this.state.mapName);
         } else {
-            alert("Saving a new file is not implemented yet...");
+            this.saveAs();
         }
     }
 
+    saveAs() {
+        this.setState({ saveAsModal: true })
+    }
+
+    saveFile(filename: string) {
+        this.setState({ loading: true });
+        var that = this;
+        $.ajax({
+            type: "POST",
+            url: "/maps/" + filename,
+            data: JSON.stringify(that.editorReference.jsonEditor.get()),
+            contentType: "application/json",
+            success: function (response) {
+                that.setState({ loading: false });
+            },
+            error: function (err) {
+                console.log(err);
+                that.setState({ loading: false });
+                alert("Error saving map: " + err.statusText);
+            }
+        })
+    }
+
     loadMap(data: any, name: string) {
-        this.setState({ json: data });
-        this.editorReference.jsonEditor.set(data);
-        this.renderMap();
+        this.updateJson(data);
         this.setState({ loading: false, mapName: name });
+    }
+
+    updateJson(data: any) {
+        this.setState({ json: data });
+        this.editorReference.jsonEditor.update(data);
+        this.renderMap();
     }
 
     downloadMap() {
@@ -129,6 +206,7 @@ class MapEditor extends React.Component<{ app: Display }, { json: any, loading: 
 
     handleEditorChange(jsonData) {
         this.setState({ json: jsonData });
+        this.renderMap();
         //this.editorReference.jsonEditor.set(jsonData);
     }
 
@@ -145,10 +223,11 @@ class MapEditor extends React.Component<{ app: Display }, { json: any, loading: 
                     <JsonEditor schema={map_schema} ajv={new Ajv()} value={this.state.json} allowedModes={["tree", "text", "code"]} ace={ace} history={true}
                         ref={this.setEditorReference.bind(this)} onChange={this.handleEditorChange.bind(this)}></JsonEditor>
                 </div>
-                <MapEditorButton onClick={this.renderMap.bind(this)} height={buttonHeight} width={window.innerWidth / 4} top={topPositioning} left={window.innerWidth / 2} text="Show Map" type="primary" />
-                <MapEditorButton onClick={this.saveMap.bind(this)} height={buttonHeight} width={window.innerWidth / 8} top={topPositioning} left={3 * window.innerWidth / 4} text="Save Map" type="secondary" />
+                <MapEditorButton onClick={this.saveMap.bind(this)} height={buttonHeight} width={window.innerWidth / 4} top={topPositioning} left={window.innerWidth / 2} text="Save" type="primary" />
+                <MapEditorButton onClick={this.saveAs.bind(this)} height={buttonHeight} width={window.innerWidth / 8} top={topPositioning} left={3 * window.innerWidth / 4} text="Save As" type="secondary" />
                 <MapEditorButton onClick={() => this.setState({ mapSelectModal: !this.state.mapSelectModal })} height={buttonHeight} width={window.innerWidth / 8} top={topPositioning} left={7 * window.innerWidth / 8} text="Load Map" type="warning" />
                 <MapSelect show={this.state.mapSelectModal} toggleShow={() => this.setState({ mapSelectModal: !this.state.mapSelectModal })} processMap={this.loadMap.bind(this)}></MapSelect>
+                <GetStringModal title="Save As" show={this.state.saveAsModal} toggleShow={() => this.setState({ saveAsModal: !this.state.saveAsModal })} callback={(name) => this.saveFile(name)} placeholder="Filename..." doneText="Save"></GetStringModal>
                 <LoadingOverlay enabled={this.state.loading}></LoadingOverlay>
             </div>
         )
