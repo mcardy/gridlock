@@ -15,6 +15,7 @@ var app = express();
 app.use(bodyParser.json({ limit: '50mb' }))
 
 app.use("/dist", express.static(__dirname + "/client/dist"));
+app.use("/img", express.static(__dirname + "/client/img"))
 app.use("/maps", maps);
 
 // Serve the display
