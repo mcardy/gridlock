@@ -1,0 +1,18 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: gridlock-deployment
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: gridlock
+    spec:
+      containers:
+      - name: gridlock
+        image: mcardy.azurecr.io/gridlock:$BUILD_NUMBER
+        ports:
+        - containerPort: 80
+      imagePullSecrets:
+      - name: $KUBERNETES_SECRET_NAME
