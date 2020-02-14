@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: gridlock-container
-        image: mcardy.azurecr.io/gridlock:latest
+        image: mcardy.azurecr.io/gridlock:$BUILD_NUMBER
         ports:
         - containerPort: 80
           name: http
