@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import express from 'express';
-import Config from '../../config';
+import Config from '../config';
 
 var router = express.Router();
 

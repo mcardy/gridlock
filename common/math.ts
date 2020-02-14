@@ -1,4 +1,5 @@
 import { Schema, type } from '@colyseus/schema';
+import { uint32 } from 'random-js';
 
 export class Point2D extends Schema {
     @type('number')
@@ -42,17 +43,17 @@ export class Point2D extends Schema {
 
 export class BezierCurve {
 
-    origin: Point2D;
-    p1: Point2D;
-    p2: Point2D;
-    p3: Point2D;
-    p4: Point2D;
-    length: number;
+    private origin: Point2D;
+    private p1: Point2D;
+    private p2: Point2D;
+    private p3: Point2D;
+    private p4: Point2D;
+    private length: number;
 
-    startPoint: Point2D;
-    startControlPoint: Point2D;
-    endControlPoint: Point2D;
-    endPoint: Point2D;
+    private startPoint: Point2D;
+    private startControlPoint: Point2D;
+    private endControlPoint: Point2D;
+    private endPoint: Point2D;
 
     constructor(start: Point2D, end: Point2D, invert?: boolean, origin?: Point2D) {
         this.origin = origin != undefined ? origin : new Point2D({ x: invert ? end.x : start.x, y: invert ? start.y : end.y });
@@ -85,10 +86,60 @@ export class BezierCurve {
         return this.endPoint;
     }
 
+    public getLength(): number {
+        if (this.length == undefined) {
+            var last = new Point2D(this.startPoint);
+            this.length = 0;
+            for (let t = 0; t < 1; t += 0.01) {
+                var next = this.evaluate(t);
+                this.length += last.distance(next);
+                last = next;
+            }
+        }
+        return this.length;
+    }
+
     public evaluate(t: number): Point2D {
         var x = Math.pow(1 - t, 3) * this.startPoint.x + 3 * t * Math.pow(1 - t, 2) * this.startControlPoint.x + 3 * Math.pow(t, 2) * (1 - t) * this.endControlPoint.x + Math.pow(t, 3) * this.endPoint.x;
         var y = Math.pow(1 - t, 3) * this.startPoint.y + 3 * t * Math.pow(1 - t, 2) * this.startControlPoint.y + 3 * Math.pow(t, 2) * (1 - t) * this.endControlPoint.y + Math.pow(t, 3) * this.endPoint.y;
         return new Point2D({ x: x, y: y });
+    }
+
+    /**
+     * Move l units the curve.
+     * @param t The t value
+     * @param l The length value
+     * @param step The step size: a smaller step size will increase accuracy but also the computation steps
+     * @param err The error size: a smaller error size will increase percision but also the computation steps
+     */
+    public next(t_0: number, l: number, step: number = 0.01, err: number = 0.0001): number {
+        if (l == 0) return t_0;
+        var t = t_0;
+        var d = 0;
+        var last = this.evaluate(t);
+        while (d < l && (t = t + step) <= 1) {
+            var next = this.evaluate(t);
+            d += last.distance(next);
+            last = next;
+        }
+        if (t >= 1) return 1; // Don't go beyond the end
+        while ((Math.abs(d - l)) > err) {
+            step = step / 2;
+            t += (d > l ? -1 : 1) * step;
+            var next = this.evaluate(t);
+            d += (d > l ? -1 : 1) * last.distance(next);
+            last = next;
+        }
+        return t;
+        /*var print = (point: Point2D) => console.log(point.x + " " + point.y);
+        var v1 = this.p1.times(-3).plus(this.p2.times(9)).plus(this.p3.times(-9)).plus(this.p4.times(3));
+        var v2 = this.p1.times(6).plus(this.p2.times(-12)).plus(this.p3.times(6));
+        var v3 = this.p1.times(-3).plus(this.p2.times(3));
+        for (var i = 0; i < l; i++) {
+            var v = v1.times(t * t).plus(v2.times(t)).plus(v3);
+            print(v);
+            t = t + 1 / (new Point2D({ x: 0, y: 0 }).distance(v));
+        }*/
     }
 
 }

@@ -10,21 +10,22 @@ import Col from 'react-bootstrap/Col';
 import uploadFile from '../../util/upload';
 import LoadingOverlay from './loadingoverlay';
 
-export default class MapSelect extends React.Component<{ show: boolean, toggleShow: () => void, processMap: (data: any, name?: string) => void }, { maps: string[], selectedMap: string, loading: boolean, isShown: boolean }> {
+export default class MapSelect extends React.Component<{ show: boolean, toggleShow: () => void, processMap: (data: any, name?: string) => void }, { maps: string[], selectedMap: string, loading: boolean }> {
 
     constructor(props) {
         super(props);
-        this.state = { maps: [], selectedMap: "", loading: false, isShown: this.props.show }
+        this.state = { maps: [], selectedMap: "", loading: false }
     }
 
     updateMaps() {
+        this.setState({ loading: true })
         var that = this;
         $.ajax({
             url: "/maps",
             type: "get",
-            async: false,
             success: function (data) {
                 that.setState({ maps: data, loading: false, selectedMap: data[0] })
+                that.setState({ loading: false });
             }
         });
     }
@@ -70,16 +71,16 @@ export default class MapSelect extends React.Component<{ show: boolean, toggleSh
         });
     }
 
-    render() {
-        if (this.props.show != this.state.isShown) {
-            if (this.props.show) {
-                this.updateMaps();
-            }
-            this.setState({ isShown: this.props.show })
+    componentDidUpdate(prevProps, prevState, snapshot) {
+        if (this.props.show && this.props.show != prevProps.show) {
+            this.updateMaps();
         }
+    }
+
+    render() {
         let maps = [];
         for (var map of this.state.maps) {
-            maps.push(<option>{map}</option>);
+            maps.push(<option key={map}>{map}</option>);
         }
         return (
             <div>

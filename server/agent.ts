@@ -2,6 +2,45 @@ import { Schema, type } from '@colyseus/schema';
 import { Point2D, BezierCurve } from '../common/math'
 import { Vertex, Edge, EdgeIntersect, Map } from './map'
 
+export class Acceleration extends Schema {
+    @type('number')
+    start: number;
+    @type('number')
+    end: number
+    @type('number')
+    rate: number
+
+    constructor(start: number, end: number, rate: number) {
+        super();
+        this.start = start;
+        this.end = end;
+        this.rate = rate;
+    }
+
+    evaluate(t: number): number {
+        if (t > 1) t = 1;
+        if (t < 0) t = 0;
+        // (b-a)(sin(pi*(x-0.5))+1)/2+a
+        return (this.end - this.start) * ((Math.sin(Math.PI * (t - 0.5)) + 1) / 2) + this.start;
+    }
+
+    /**
+     * Gets the distance travelled over the course of this acceleration/deceleration.
+     * @param t_0 The starting point for the t value used in distance calculations (usually t_0=0)
+     */
+    getTotalDistanceTravelled(t_0: number = 0): number {
+        // antiderivative of (b-a)(sin(pi*(x-0.5))+1)/2+a
+        // var integral = (x: number) => (this.end - this.start) * (x - ((Math.cos(Math.PI * (x - 0.5))) / Math.PI) + 2 * this.start * x) / 2
+        // return integral(1) - integral(0);
+        // Didn't need the above...
+        var distance = 0;
+        for (let t: number = t_0; t <= 1; t += this.rate) {
+            distance += this.evaluate(t);
+        }
+        return distance;
+    }
+}
+
 export class Agent extends Schema {
     // The following get transmitted to the client
     @type('number')
@@ -14,7 +53,10 @@ export class Agent extends Schema {
     @type('number')
     speed: number = 1
 
-    // The following are server-side only
+    @type(Acceleration)
+    acceleration: Acceleration = undefined;
+
+    // The following are server-side only as they don't transmit well with colyseus due to cyclic dependencies
     t: number
     source: Vertex
     dest: Vertex
@@ -92,24 +134,15 @@ export class Agent extends Schema {
 
         var l1 = this.edge.sourceVertex.location;
         var l2 = this.edge.destVertex.location;
-        if (l1.x == l2.x && this.edge.getControlPoint() == undefined) {
-            // Linear in x
-            this.location.y += (l1.y < l2.y ? 1 : -1) * this.speed;
-        } else if (l1.y == l2.y && this.edge.getControlPoint() == undefined) {
-            // Linear in y
-            this.location.x += (l1.x < l2.x ? 1 : -1) * this.speed;
+        // TODO cache bezierPath
+        var bezierPath = new BezierCurve(this.edge.sourceVertex.location, this.edge.destVertex.location, this.edge.invert, this.edge.ctrlX != undefined && this.edge.ctrlY != undefined ?
+            new Point2D({ x: this.edge.ctrlX, y: this.edge.ctrlY }) : undefined);
+        this.t = bezierPath.next(this.t, this.speed);
+        if (this.t <= 1) {
+            this.location = bezierPath.evaluate(this.t);
         } else {
-            this.t += this.speed;
-            var t = this.t / this.edge.length;
-            if (t <= 1) {
-                // TODO cache the bezier path
-                var bezierPath = new BezierCurve(this.edge.sourceVertex.location, this.edge.destVertex.location, this.edge.invert, this.edge.ctrlX != undefined && this.edge.ctrlY != undefined ?
-                    new Point2D({ x: this.edge.ctrlX, y: this.edge.ctrlY }) : undefined);
-                this.location = bezierPath.evaluate(t);
-            } else {
-                this.location.x = l2.x;
-                this.location.y = l2.y;
-            }
+            this.location.x = l2.x;
+            this.location.y = l2.y;
         }
         if (this.location.x == this.edge.destVertex.location.x && this.location.y == this.edge.destVertex.location.y) {
             for (var intersect of this.edge.intersectPoints)

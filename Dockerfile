@@ -7,6 +7,7 @@ RUN npm install
 
 COPY . .
 
+RUN npm run-script test
 RUN npm run-script bundle
 
 EXPOSE 80
