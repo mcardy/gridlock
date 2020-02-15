@@ -113,7 +113,7 @@ export class BezierCurve {
      * @param err The error size: a smaller error size will increase percision but also the computation steps
      */
     public next(t_0: number, l: number, step: number = 0.01, err: number = 0.0001): number {
-        if (l == 0) return t_0;
+        if (l == 0 || Number.isNaN(l) || !Number.isFinite(l) || l == undefined) return t_0;
         var t = t_0;
         var d = 0;
         var last = this.evaluate(t);

@@ -1,5 +1,4 @@
 import { Schema, ArraySchema, type } from '@colyseus/schema';
-import { Mutex } from './mutex';
 import { Point2D, BezierCurve } from '../common/math';
 import { Agent } from './agent'
 
@@ -22,7 +21,6 @@ export class Vertex extends Schema {
 export class EdgeIntersect {
     edge: Edge
     point: Point2D
-    lock: Mutex<Agent>
 
     public constructor(init?: Partial<EdgeIntersect>) {
         Object.assign(this, init);
@@ -80,7 +78,7 @@ export class Edge extends Schema {
 
     public connectsWith(edge: Edge): boolean {
         if (edge == undefined) return false;
-        return this == edge || this.destVertex == edge.sourceVertex || this.sourceVertex == edge.sourceVertex;
+        return this == edge || this.dest == edge.source || this.source == edge.source;
     }
 
     public getControlPoint(): Point2D {

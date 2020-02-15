@@ -1,7 +1,6 @@
 import { Vertex, Map, Edge, Intersection, EdgeIntersect } from '../map';
 import { Agent } from '../agent'
 import { Point2D, BezierCurve } from '../../common/math';
-import { Mutex } from '../mutex';
 import { Room, Delayed, Client } from 'colyseus';
 import { Random, MersenneTwister19937 } from 'random-js';
 import { Schema, ArraySchema, type } from '@colyseus/schema';
@@ -82,9 +81,8 @@ export class Simulation extends Room<SimulationState> {
 
                 var ip = e1.calculateIntersection(e2);
                 if (ip != undefined) {
-                    var mutex = new Mutex<Agent>(); // The two intersection points share a mutex, this will change...
-                    e1.intersectPoints.push(new EdgeIntersect({ edge: e2, point: ip, lock: mutex }));
-                    e2.intersectPoints.push(new EdgeIntersect({ edge: e1, point: ip, lock: mutex }));
+                    e1.intersectPoints.push(new EdgeIntersect({ edge: e2, point: ip }));
+                    e2.intersectPoints.push(new EdgeIntersect({ edge: e1, point: ip }));
                 }
             }
         }
