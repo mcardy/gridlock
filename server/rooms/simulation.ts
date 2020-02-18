@@ -157,10 +157,10 @@ export class Simulation extends Room<SimulationState> {
     }
 
     onMessage(client, data) {
-        if (data.command == 'pause') {
-            this.state.paused = true && this.state.map.agents != undefined;
-        } else if (data.command == 'unpause') {
-            this.state.paused = false;
+        if (data.command == 'pause' && !this.state.paused) {
+            this.state.paused = true && this.state.map != undefined && this.state.map.agents != undefined;
+        } else if (data.command == 'unpause' && this.state.paused) {
+            this.state.paused = !(this.state.map != undefined && this.state.map.agents != undefined);
         } else if (data.command == 'setmap') {
             this.processMap(data.map);
         } else if (data.command = 'setSimulationSpeed') {

@@ -45,6 +45,8 @@ export class Edge extends Schema {
     readonly sourceVertex: Vertex
     readonly destVertex: Vertex
 
+    readonly curve: BezierCurve
+
     // Derived/mutable parameters
     @type('number')
     length: number = 0
@@ -69,6 +71,8 @@ export class Edge extends Schema {
         this.intersectPoints = [];
         this.ctrlX = ctrlX;
         this.ctrlY = ctrlY;
+        this.curve = new BezierCurve(this.sourceVertex.location, this.destVertex.location, this.invert, this.ctrlX != undefined && this.ctrlY != undefined ?
+            new Point2D({ x: this.ctrlX, y: this.ctrlY }) : undefined);
     }
 
     public intersectsWith(edge: Edge): EdgeIntersect {
@@ -78,7 +82,7 @@ export class Edge extends Schema {
 
     public connectsWith(edge: Edge): boolean {
         if (edge == undefined) return false;
-        return this == edge || this.dest == edge.source || this.source == edge.source;
+        return this == edge || this.dest == edge.source;// || this.source == edge.source;
     }
 
     public getControlPoint(): Point2D {
