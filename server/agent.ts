@@ -302,6 +302,8 @@ export class FollowingBehaviour extends Behaviour<Acceleration, Agent> {
         var xIncreasing = agent.edge.sourceVertex.location.x <= agent.edge.destVertex.location.x;
         var yIncreasing = agent.edge.sourceVertex.location.y <= agent.edge.destVertex.location.y;
 
+        var minDistance = Infinity;
+
         for (var other of agent.map.agents) {
             if (other.edge == undefined) continue;
             if (agent.edge.connectsWith(other.edge)) { // Moving toward another agent
@@ -311,18 +313,26 @@ export class FollowingBehaviour extends Behaviour<Acceleration, Agent> {
                     (agent.edge != other.edge ||
                         ((xIncreasing == agent.location.x <= other.location.x) && (yIncreasing == agent.location.y <= other.location.y)))) {
                     // Adjust acceleration
-                    var denom = distance - 10;
-                    if (denom <= 1) denom = 1;
-                    var targetRate = denom == 1 ? 1 : (agent.speed == 0 ? 1 : agent.speed) / denom;
-                    var targetSpeed = Math.max(agent.speed - (safeDistance - distance) / safeDistance, 0);
-                    if (agent.acceleration == undefined || agent.acceleration.start <= agent.speed) {
-                        return new Acceleration(agent.speed, 0, targetRate);
-                    } else {
-                        return new Acceleration(agent.acceleration.start, 0, targetRate);
+                    if (distance < minDistance) {
+                        minDistance = distance;
                     }
                 }
             }
         }
+
+        if (minDistance != Infinity) {
+            var denom = minDistance - 10;
+            if (denom <= 1) denom = 1;
+            var targetRate = denom == 1 ? 1 : (agent.speed == 0 ? 1 : agent.speed) / denom;
+            //var targetSpeed = Math.max(agent.speed - (safeDistance - distance) / safeDistance, 0);
+            if (agent.acceleration == undefined || agent.acceleration.start <= agent.speed) {
+                return new Acceleration(agent.speed, 0, targetRate);
+            } else {
+                return new Acceleration(agent.acceleration.start, 0, targetRate);
+            }
+        }
+
+
         return undefined;
     }
 
