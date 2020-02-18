@@ -172,7 +172,6 @@ export class Decider<T, E> {
                 if (priority == behaviour.getPriority()) {
                     var result = behaviour.evaluate(entity);
                     if (result != undefined) {
-                        // console.log(entity + " " + behaviour.constructor.name)
                         results.push(result);
                     }
                 }
@@ -241,8 +240,8 @@ export class IntersectionBehaviour extends Behaviour<Acceleration, Agent> {
         var intersection: EdgeIntersect;
         for (var other of agent.map.agents) {
             if (other.edge == undefined) continue;
-            if ((intersection = this.getIntersection(agent, other)) != undefined) { // Moving toward an intersection
-                var safeDistance = 35;
+            if ((intersection = this.getIntersection(agent, other)) != undefined && agent.edge.currentPriority < other.edge.currentPriority) { // Moving toward an intersection
+                var safeDistance = 30;
                 var myDistance = agent.location.distance(intersection.point);
                 var theirDistance = other.location.distance(intersection.point);
                 if (myDistance > safeDistance || theirDistance > safeDistance) continue;

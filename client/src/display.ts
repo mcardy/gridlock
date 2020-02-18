@@ -9,9 +9,11 @@ class Display {
 
     private selectedEdge: { sourceId: number, destId: number };
     private selectedVertex: { id: number }
+    private selectedAgent: { id: number }
 
     public edgeCallback: (source: number, dest: number) => void;
     public vertexCallback: (id: number) => void;
+    public agentCallback: (id: number) => void;
 
     private clickables: PIXI.DisplayObject[];
 
@@ -84,14 +86,16 @@ class Display {
                 clickables.push(child);
             }
         }
+        clickables.reverse();
         if (map.agents) {
             var agents = map.agents;
             for (let agent of agents) {
-                let child = this.drawAgent(agent.location.x, agent.location.y, scaler);
+                let child = this.drawAgent(agent.id, agent.location.x, agent.location.y, scaler);
                 this.agentContainer.addChild(child);
                 clickables.push(child);
             }
         }
+        clickables.reverse();
 
         this.clickables = clickables;
 
@@ -101,6 +105,7 @@ class Display {
     private onClick(event) {
         var previousEdge = this.selectedEdge;
         var previousVertex = this.selectedVertex;
+        var previousAgent = this.selectedAgent;
         var click = new Point2D(this.PixiApp.renderer.plugins.interaction.mouse.global);
         for (var child of this.clickables) {
             if (child.hitArea != undefined) {
@@ -116,16 +121,27 @@ class Display {
         if (this.selectedEdge != undefined) {
             if (this.selectedEdge == previousEdge) {
                 this.selectedEdge = undefined;
+                this.callEdgeCallback(undefined, undefined);
             } else if (this.edgeCallback != undefined) {
-                this.edgeCallback(this.selectedEdge.sourceId, this.selectedEdge.destId);
+                this.callEdgeCallback(this.selectedEdge.sourceId, this.selectedEdge.destId);
             }
             redraw = true;
         }
         if (this.selectedVertex != undefined) {
             if (this.selectedVertex == previousVertex) {
                 this.selectedVertex = undefined;
+                this.callVertexCallback(undefined);
             } else if (this.vertexCallback != undefined) {
-                this.vertexCallback(this.selectedVertex.id);
+                this.callVertexCallback(this.selectedVertex.id);
+            }
+            redraw = true;
+        }
+        if (this.selectedAgent != undefined) {
+            if (this.selectedAgent == previousAgent) {
+                this.selectedAgent = undefined;
+                this.callAgentCallback(undefined);
+            } else if (this.agentCallback != undefined) {
+                this.callAgentCallback(this.selectedAgent.id);
             }
             redraw = true;
         }
@@ -134,12 +150,31 @@ class Display {
         }
     }
 
+    public callVertexCallback(id: number) {
+        if (this.vertexCallback != undefined)
+            this.vertexCallback(id);
+    }
+
+    public callEdgeCallback(source: number, dest: number) {
+        if (this.edgeCallback != undefined)
+            this.edgeCallback(source, dest);
+    }
+
+    public callAgentCallback(id: number) {
+        if (this.agentCallback != undefined)
+            this.agentCallback(id);
+    }
+
     public setEdgeSelectCallback(fn: (source: number, dest: number) => void): void {
         this.edgeCallback = fn;
     }
 
     public setVertexSelectCallback(fn: (id: number) => void): void {
         this.vertexCallback = fn;
+    }
+
+    public setAgentSelectCallback(fn: (id: number) => void): void {
+        this.agentCallback = fn;
     }
 
     public getSelectedEdge(): { sourceId: number, destId: number } {
@@ -164,6 +199,14 @@ class Display {
 
     private setSelectedVertex(id: number): void {
         this.selectedVertex = { id: id };
+    }
+
+    private isSelectedAgent(id: number) {
+        return this.selectedAgent != undefined && this.selectedAgent.id == id;
+    }
+
+    private setSelectedAgent(id: number): void {
+        this.selectedAgent = { id: id };
     }
 
     private drawCurve(source, dest, invert = false, disabled = false, scaler = 1, origin = undefined): PIXI.DisplayObject {
@@ -214,13 +257,18 @@ class Display {
         return circle;
     }
 
-    private drawAgent(x, y, scaler = 1) {
+    private drawAgent(id, x, y, scaler = 1) {
         let circle = new PIXI.Graphics();
-        circle.beginFill(Colours.danger);
+        circle.beginFill(this.isSelectedAgent(id) ? 0xFFFFFF : Colours.danger);
         circle.drawCircle(0, 0, 4 * scaler);
         circle.endFill();
         circle.x = x * scaler;
         circle.y = y * scaler;
+        circle.hitArea = new PIXI.Circle(circle.x, circle.y, 4 * scaler);
+        circle.on('customclick', () => {
+            this.setSelectedAgent(id);
+            return true;
+        })
         return circle;
     }
 

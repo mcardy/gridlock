@@ -111,6 +111,7 @@ class MapEditor extends React.Component<{ app: Display }, { json: any, loading: 
     }
 
     selectVertex(id: number) {
+        if (id == undefined) return;
         var vertex = this.findVertex(id);
         if (vertex.index >= 0) {
             var path = { path: ["vertices", vertex.index] };
@@ -130,6 +131,7 @@ class MapEditor extends React.Component<{ app: Display }, { json: any, loading: 
     }
 
     selectEdge(source: number, dest: number) {
+        if (source == undefined || dest == undefined) return;
         var edge = this.findEdge(source, dest);
         if (edge.index >= 0) {
             var path = { path: ["edges", edge.index] };

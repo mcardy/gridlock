@@ -13,10 +13,13 @@ import MapSelect from './components/mapselect';
 
 const menuWidth = 40;
 
-class SimulationMenu extends React.Component<{ room: Colyseus.Room }, { open: boolean, simulationSpeed: number, showSelectMapModal: boolean, loading: boolean }> {
+class SimulationMenu extends React.Component<{ room: Colyseus.Room }, { open: boolean, simulationSpeed: number, showSelectMapModal: boolean, loading: boolean, agent: number, vertex: number, edge: { source: number, dest: number } }> {
     constructor(props) {
         super(props);
-        this.state = { open: false, simulationSpeed: this.props.room.state.simulationSpeed, showSelectMapModal: false, loading: false };
+        display.setEdgeSelectCallback(this.selectEdge.bind(this));
+        display.setVertexSelectCallback(this.selectVertex.bind(this));
+        display.setAgentSelectCallback(this.selectAgent.bind(this));
+        this.state = { open: false, simulationSpeed: this.props.room.state.simulationSpeed, showSelectMapModal: false, loading: false, agent: undefined, edge: undefined, vertex: undefined };
     }
 
     toggleMenu() {
@@ -46,7 +49,34 @@ class SimulationMenu extends React.Component<{ room: Colyseus.Room }, { open: bo
         this.props.room.send({ command: "setSimulationSpeed", speed: speed })
     }
 
+    selectAgent(id: number) {
+        this.setState({ agent: id });
+    }
+
+    selectEdge(source: number, dest: number) {
+        this.setState({ edge: { source: source, dest: dest } });
+    }
+
+    selectVertex(id: number) {
+        this.setState({ vertex: id });
+    }
+
     render() {
+        var agent = undefined;
+        if (this.state.agent != undefined) {
+            var selectedAgent = undefined;
+            if (this.props.room.state.map != undefined && this.props.room.state.map.agents != undefined) {
+                for (var a of this.props.room.state.map.agents) {
+                    if (a.id == this.state.agent) {
+                        selectedAgent = a;
+                        break;
+                    }
+                }
+            }
+            agent = (<p>Selected Agent: {this.state.agent}, {a.sourceId} -> {a.destId}</p>);
+        }
+        var edge = this.state.edge != undefined && this.state.edge.source != undefined ? (<p>Selected Edge: {this.state.edge.source} -> {this.state.edge.dest}</p>) : undefined;
+        var vertex = this.state.vertex != undefined ? (<p>Selected Vertex: {this.state.vertex}</p>) : undefined;
         return (
             <div className={"sidebar-menu" + (this.state.open ? " open" : "")}>
                 <div className="sidebar-menu-bar">
@@ -60,7 +90,9 @@ class SimulationMenu extends React.Component<{ room: Colyseus.Room }, { open: bo
                         <label>Set Simulation Speed</label>
                         <input type="range" className="custom-range" min="0.125" max="4" step="0.125" value={this.state.simulationSpeed} onChange={this.setSimulationSpeed.bind(this)} />
                     </div>
-
+                    {agent}
+                    {edge}
+                    {vertex}
                     <a className="btn btn-secondary" role="button" href="/map-editor/" target="_blank" style={{ position: "absolute", bottom: 10, width: "calc(100% - 20px)" }}>Open Map Editor</a>
                 </div>
                 <MapSelect show={this.state.showSelectMapModal} toggleShow={this.toggleSelectedMapModal.bind(this)} processMap={this.setMap.bind(this)}></MapSelect>
