@@ -21,6 +21,8 @@ class Display {
     private vertexContainer: PIXI.Container;
     private agentContainer: PIXI.Container;
 
+    private uiContainer: PIXI.Container;
+
     constructor() {
         this.PixiApp = new PIXI.Application({
             width: 800,
@@ -42,8 +44,9 @@ class Display {
         this.edgeContainer = new PIXI.Container();
         this.vertexContainer = new PIXI.Container();
         this.agentContainer = new PIXI.Container();
+        this.uiContainer = new PIXI.Container();
 
-        this.PixiApp.stage.addChild(this.edgeContainer, this.vertexContainer, this.agentContainer);
+        this.PixiApp.stage.addChild(this.edgeContainer, this.vertexContainer, this.agentContainer, this.uiContainer);
 
         let overlay = new PIXI.Graphics();
         overlay.interactive = true;
@@ -67,6 +70,7 @@ class Display {
         this.vertexContainer.removeChildren();
         this.edgeContainer.removeChildren();
         this.agentContainer.removeChildren();
+        this.uiContainer.removeChildren();
 
         for (let vertex of vertices) {
             let child = this.drawVertex(vertex.id, vertex.location.x, vertex.location.y, scaler);
@@ -254,6 +258,34 @@ class Display {
             this.setSelectedVertex(id);
             return true;
         })
+        if (this.isSelectedVertex(id)) {
+            let container = new PIXI.Container();
+            var borderWidth = 4;
+            var xOffset = 12;
+            var yOffset = -4 * scaler - borderWidth;
+            let text = new PIXI.Text("[" + id + "] x: " + x + ", y: " + y);
+            text.style = { fill: "black", font: "8pt Arial" };
+            var originalHeight = text.height;
+            text.height = 8 * scaler;
+            text.width = text.width * (text.height / originalHeight);
+            if (scaler * x + xOffset + text.width + borderWidth > this.PixiApp.view.width) {
+                xOffset = -xOffset - text.width - 2 * borderWidth;
+            } else if (scaler * y + yOffset + text.height + borderWidth > this.PixiApp.view.height) {
+                yOffset = yOffset - text.height;
+                xOffset = - text.width / 2 - 2 * borderWidth;
+            } else if (scaler * y + yOffset <= 0) {
+                yOffset = yOffset + text.height + 2 * borderWidth;
+                xOffset = - text.width / 2 - borderWidth;
+            }
+            text.position.x = scaler * x + xOffset + borderWidth;
+            text.position.y = scaler * y + yOffset + borderWidth;
+            let rect = new PIXI.Graphics();
+            rect.beginFill(Colours.bgLight);
+            rect.drawRoundedRect(scaler * x + xOffset, scaler * y + yOffset, text.width + 2 * borderWidth, text.height + 2 * borderWidth, borderWidth);
+            container.addChild(rect);
+            container.addChild(text);
+            this.uiContainer.addChild(container);
+        }
         return circle;
     }
 

@@ -11,6 +11,12 @@ const map_schema = {
         "edges",
     ],
     "properties": {
+        "spawn_rate": {
+            "$id": "#/properties/spawn_rate",
+            "type": "integer",
+            "title": "Spawn Rate",
+            "default": 5
+        },
         "seed": {
             "$id": "#/properties/seed",
             "type": "integer",
