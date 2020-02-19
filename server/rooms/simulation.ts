@@ -5,6 +5,17 @@ import { Room, Delayed, Client } from 'colyseus';
 import { Random, MersenneTwister19937 } from 'random-js';
 import { Schema, ArraySchema, type } from '@colyseus/schema';
 
+class Metrics extends Schema {
+    @type('number')
+    throughput: number = 0;
+    @type('number')
+    totalTicks: number = 0;
+    @type('number')
+    spawned: number = 0;
+    @type('number')
+    throughputPerUnitTime: number = 0;
+}
+
 class SimulationState extends Schema {
     @type(Map)
     map: Map;
@@ -12,15 +23,16 @@ class SimulationState extends Schema {
     paused: boolean = true;
     @type('number')
     simulationSpeed: number = 0.25;
+    @type(Metrics)
+    metrics: Metrics;
 }
 
 export class Simulation extends Room<SimulationState> {
     random: Random; // Random created for each map, server side property
-    tickCounter: number; // Number of ticks that have passed, server side property
+    spawnRate: number;
 
     // Constant tick rate
     readonly tickRate: number = 100;
-    spawnRate: number = 5;
 
 
     onCreate(options) {
@@ -35,7 +47,8 @@ export class Simulation extends Room<SimulationState> {
         var mapObject = JSON.parse(map)
 
         this.random = new Random(MersenneTwister19937.seed(mapObject.seed))
-        this.tickCounter = 0;
+        this.state.metrics = new Metrics();
+        this.spawnRate = "spawn_rate" in mapObject ? mapObject.spawn_rate : 5;
 
         this.state.map = new Map();
         this.state.map.width = mapObject.width;
@@ -113,8 +126,9 @@ export class Simulation extends Room<SimulationState> {
 
     update(delta) {
         if (!this.state.paused) {
-            this.tickCounter = this.tickCounter + 1;
-            if (this.tickCounter % this.tickRate == 0) {
+            this.state.metrics.totalTicks = this.state.metrics.totalTicks + 1;
+            this.state.metrics.throughputPerUnitTime = this.state.metrics.throughput / this.state.metrics.totalTicks;
+            if (this.state.metrics.totalTicks % this.tickRate == 0) {
                 for (var intersection of this.state.map.intersections) {
                     intersection.currentTime++;
                     if (intersection.currentTime == intersection.timings[intersection.currentIndex]) {
@@ -127,19 +141,21 @@ export class Simulation extends Room<SimulationState> {
                     }
                 }
             }
-            if (this.spawnRate != 0 && this.tickCounter % Math.round(this.tickRate / this.spawnRate) == 0) {
+            if (this.spawnRate != 0 && this.state.metrics.totalTicks % Math.round(this.tickRate / this.spawnRate) == 0) {
                 var sourceId = this.state.map.sources[this.random.integer(0, this.state.map.sources.length - 1)];
                 var source = this.state.map.findVertexById(sourceId);
                 var destinations = this.state.map.getAssignableDestinations(source);
                 var dest = destinations[this.random.integer(0, destinations.length - 1)];
 
-                var agent = new Agent(source, dest, this.state.map);
+                var agent = new Agent(source, dest, this.state.map, this.random.real(0.9, 1.1));
+                this.state.metrics.spawned = this.state.metrics.spawned + 1;
                 this.state.map.agents.push(agent);
             }
             this.state.map.agents.forEach(function (agent) {
                 agent.update();
             });
             for (agent of this.state.map.agents.filter(function (agent) { return agent.shouldDespawn() })) {
+                this.state.metrics.throughput = this.state.metrics.throughput + 1;
                 this.state.map.agents.splice(this.state.map.agents.indexOf(agent), 1);
             }
         }

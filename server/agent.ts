@@ -80,7 +80,7 @@ export class Agent extends Schema {
 
     decider: Decider<Acceleration, Agent>
 
-    constructor(source: Vertex, dest: Vertex, map: Map) {
+    constructor(source: Vertex, dest: Vertex, map: Map, speedModifier: number) {
         super();
         this.sourceId = source.id;
         this.destId = dest.id;
@@ -99,8 +99,8 @@ export class Agent extends Schema {
                 new IntersectionBehaviour(0),
                 new YeildBehaviour(0),
                 new FollowingBehaviour(0),
-                new StopBehaviour(9),
-                new GoBehaviour(10)
+                new StopBehaviour(9, speedModifier),
+                new GoBehaviour(10, speedModifier)
             ])
     }
 
@@ -205,17 +205,32 @@ export abstract class Behaviour<T, E> {
 
 export class GoBehaviour extends Behaviour<Acceleration, Agent> {
 
+    private speedModifier: number
+
+    constructor(priority: number, speedModifier: number) {
+        super(priority);
+        this.speedModifier = speedModifier;
+    }
+
     public evaluate(agnet: Agent): Acceleration {
-        return new Acceleration(0, 1, 0.2);
+        return new Acceleration(0, this.speedModifier, 0.1);
     }
 
 }
 
 export class StopBehaviour extends Behaviour<Acceleration, Agent> {
 
+    private speedModifier: number
+
+    constructor(priority: number, speedModifier: number) {
+        super(priority);
+        this.speedModifier = speedModifier;
+    }
+
     public evaluate(agent: Agent): Acceleration {
         if (agent.location.distance(agent.edge.destVertex.location) <= 10 && agent.path.length > 0 && agent.path[agent.path.length - 1].currentPriority == 0) {
-            return new Acceleration(agent.speed, 0, 0.05);
+            // This 1 should be replaced with max speed on edge
+            return new Acceleration(this.speedModifier, 0, 0.05);
         } else if (agent.edge.currentPriority == 0 && agent.location.distance(agent.edge.sourceVertex.location) <= 1) {
             return new Acceleration(agent.speed, 0, 1);
         }
@@ -234,6 +249,8 @@ export class IntersectionBehaviour extends Behaviour<Acceleration, Agent> {
     }
 
     public evaluate(agent: Agent): Acceleration {
+        if (agent.edge.currentPriority == 0) return undefined;
+
         var xIncreasing = agent.edge.sourceVertex.location.x <= agent.edge.destVertex.location.x;
         var yIncreasing = agent.edge.sourceVertex.location.y <= agent.edge.destVertex.location.y;
 
@@ -241,7 +258,7 @@ export class IntersectionBehaviour extends Behaviour<Acceleration, Agent> {
         for (var other of agent.map.agents) {
             if (other.edge == undefined) continue;
             if ((intersection = this.getIntersection(agent, other)) != undefined && agent.edge.currentPriority < other.edge.currentPriority) { // Moving toward an intersection
-                var safeDistance = 30;
+                var safeDistance = 25;
                 var myDistance = agent.location.distance(intersection.point);
                 var theirDistance = other.location.distance(intersection.point);
                 if (myDistance > safeDistance || theirDistance > safeDistance) continue;
@@ -271,6 +288,8 @@ export class IntersectionBehaviour extends Behaviour<Acceleration, Agent> {
 export class YeildBehaviour extends Behaviour<Acceleration, Agent> {
 
     public evaluate(agent: Agent): Acceleration {
+        if (agent.edge.currentPriority == 0) return undefined;
+
         for (var other of agent.map.agents) {
             if (other.edge == undefined) continue;
             // Moving toward the same point and they have the right of way

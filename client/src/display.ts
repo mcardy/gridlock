@@ -94,7 +94,7 @@ class Display {
         if (map.agents) {
             var agents = map.agents;
             for (let agent of agents) {
-                let child = this.drawAgent(agent.id, agent.location.x, agent.location.y, scaler);
+                let child = this.drawAgent(agent.id, agent.location.x, agent.location.y, agent.sourceId, agent.destId, agent.speed, scaler);
                 this.agentContainer.addChild(child);
                 clickables.push(child);
             }
@@ -259,37 +259,12 @@ class Display {
             return true;
         })
         if (this.isSelectedVertex(id)) {
-            let container = new PIXI.Container();
-            var borderWidth = 4;
-            var xOffset = 12;
-            var yOffset = -4 * scaler - borderWidth;
-            let text = new PIXI.Text("[" + id + "] x: " + x + ", y: " + y);
-            text.style = { fill: "black", font: "8pt Arial" };
-            var originalHeight = text.height;
-            text.height = 8 * scaler;
-            text.width = text.width * (text.height / originalHeight);
-            if (scaler * x + xOffset + text.width + borderWidth > this.PixiApp.view.width) {
-                xOffset = -xOffset - text.width - 2 * borderWidth;
-            } else if (scaler * y + yOffset + text.height + borderWidth > this.PixiApp.view.height) {
-                yOffset = yOffset - text.height;
-                xOffset = - text.width / 2 - 2 * borderWidth;
-            } else if (scaler * y + yOffset <= 0) {
-                yOffset = yOffset + text.height + 2 * borderWidth;
-                xOffset = - text.width / 2 - borderWidth;
-            }
-            text.position.x = scaler * x + xOffset + borderWidth;
-            text.position.y = scaler * y + yOffset + borderWidth;
-            let rect = new PIXI.Graphics();
-            rect.beginFill(Colours.bgLight);
-            rect.drawRoundedRect(scaler * x + xOffset, scaler * y + yOffset, text.width + 2 * borderWidth, text.height + 2 * borderWidth, borderWidth);
-            container.addChild(rect);
-            container.addChild(text);
-            this.uiContainer.addChild(container);
+            this.drawUI(x, y, "[" + id + "] x: " + x + ", y: " + y, scaler);
         }
         return circle;
     }
 
-    private drawAgent(id, x, y, scaler = 1) {
+    private drawAgent(id, x, y, source, dest, speed, scaler = 1) {
         let circle = new PIXI.Graphics();
         circle.beginFill(this.isSelectedAgent(id) ? 0xFFFFFF : Colours.danger);
         circle.drawCircle(0, 0, 4 * scaler);
@@ -301,7 +276,39 @@ class Display {
             this.setSelectedAgent(id);
             return true;
         })
+        if (this.isSelectedAgent(id)) {
+            this.drawUI(x, y, "[" + id + "] source: " + source + ", dest: " + dest + ", speed: " + speed, scaler);
+        }
         return circle;
+    }
+
+    private drawUI(x: number, y: number, msg: string, scaler: number) {
+        let container = new PIXI.Container();
+        var borderWidth = 4;
+        var xOffset = 6 * scaler;
+        var yOffset = -4 * scaler - borderWidth;
+        let text = new PIXI.Text(msg);
+        text.style = { fill: "black", font: "8pt Arial" };
+        var originalHeight = text.height;
+        text.height = 8 * scaler;
+        text.width = text.width * (text.height / originalHeight);
+        if (scaler * x + xOffset + text.width + borderWidth > this.PixiApp.view.width) {
+            xOffset = -xOffset - text.width - 2 * borderWidth;
+        } else if (scaler * y + yOffset + text.height + borderWidth > this.PixiApp.view.height) {
+            yOffset = yOffset - text.height;
+            xOffset = - text.width / 2 - 2 * borderWidth;
+        } else if (scaler * y + yOffset <= 0) {
+            yOffset = yOffset + text.height + 2 * borderWidth;
+            xOffset = - text.width / 2 - borderWidth;
+        }
+        text.position.x = scaler * x + xOffset + borderWidth;
+        text.position.y = scaler * y + yOffset + borderWidth;
+        let rect = new PIXI.Graphics();
+        rect.beginFill(Colours.bgLight);
+        rect.drawRoundedRect(scaler * x + xOffset, scaler * y + yOffset, text.width + 2 * borderWidth, text.height + 2 * borderWidth, borderWidth);
+        container.addChild(rect);
+        container.addChild(text);
+        this.uiContainer.addChild(container);
     }
 
 }
