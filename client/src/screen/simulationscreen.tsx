@@ -62,6 +62,7 @@ class SimulationMenu extends React.Component<{ room: Colyseus.Room }, {
     }
 
     setMap(data) {
+        this.props.room.state.map = undefined;
         this.props.room.send({ command: "setmap", map: JSON.stringify(data) });
         this.setLoading(false);
     }

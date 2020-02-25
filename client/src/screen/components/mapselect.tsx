@@ -31,12 +31,12 @@ export default class MapSelect extends React.Component<{ show: boolean, toggleSh
     }
 
     uploadMap() {
-        this.setState({ loading: true });
         uploadFile((result, name) => {
             if (!name.endsWith(".json")) {
                 alert("Can only upload .json files...");
                 return;
             }
+            this.setState({ loading: true });
             name = name.substr(0, name.length - 5);
             name = name.replace(" ", "_");
             const that = this;
@@ -47,7 +47,8 @@ export default class MapSelect extends React.Component<{ show: boolean, toggleSh
                 data: result,
                 contentType: "application/json",
                 success: function (response) {
-                    that.state.maps.push(name);
+                    if (!(name in that.state.maps))
+                        that.state.maps.push(name);
                     that.setState({ selectedMap: name, loading: false });
                 },
                 error: function (err) {

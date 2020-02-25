@@ -85,7 +85,7 @@ class Display {
                 source = vertices.find((v) => v.id == edge.source);
                 dest = vertices.find((v) => v.id == edge.dest);
                 if (source == undefined || dest == undefined) return;
-                let child = this.drawCurve(source, dest, invert, priority == 0, scaler, (edge.ctrlX == undefined || edge.ctrlY == undefined) ? undefined : new Point2D({ x: edge.ctrlX, y: edge.ctrlY }));
+                let child = this.drawCurve(source, dest, invert, priority == 0 ? 0xFF0000 : (edge.priorities != undefined && edge.priorities.length > 1 ? 0x00FF00 : 0xFFFFFF), scaler, (edge.ctrlX == undefined || edge.ctrlY == undefined) ? undefined : new Point2D({ x: edge.ctrlX, y: edge.ctrlY }));
                 this.edgeContainer.addChild(child);
                 clickables.push(child);
             }
@@ -213,11 +213,11 @@ class Display {
         this.selectedAgent = { id: id };
     }
 
-    private drawCurve(source, dest, invert = false, disabled = false, scaler = 1, origin = undefined): PIXI.DisplayObject {
+    private drawCurve(source, dest, invert = false, color = 0xFFFFFF, scaler = 1, origin = undefined): PIXI.DisplayObject {
         var l1 = source.location;
         var l2 = dest.location;
         let curve = new PIXI.Graphics();
-        curve.lineStyle(4, !disabled ? 0xFFFFFF : 0xFF0000, this.isSelectedEdge(source.id, dest.id) ? 1 : 0.5);
+        curve.lineStyle(4, color, this.isSelectedEdge(source.id, dest.id) ? 1 : 0.5);
         curve.moveTo(l1.x * scaler, l1.y * scaler);
         if ((l1.x == l2.x || l1.y == l2.y) && origin == undefined) {
             curve.lineTo(l2.x * scaler, l2.y * scaler);
