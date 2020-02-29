@@ -1,8 +1,7 @@
 import { Schema, type } from '@colyseus/schema';
 import { Point2D, BezierCurve } from '../common/math'
 import { Vertex, Edge, EdgeIntersect, Map } from './map'
-
-
+import { Simulation } from './rooms/simulation'
 
 export class Acceleration extends Schema {
     @type('number')
@@ -61,7 +60,7 @@ export class Agent extends Schema {
     @type(Point2D)
     location: Point2D
     @type('number')
-    speed: number = 1
+    speed: number = 60
 
     @type(Acceleration)
     acceleration: Acceleration = undefined;
@@ -92,15 +91,17 @@ export class Agent extends Schema {
         this.path = this.map.getBestPath(source, dest);
         this.edge = this.path.pop();
         this.t = 0;
+        this.speed = this.edge.speed * speedModifier;
 
         this.decider = new Decider<Acceleration, Agent>(
             (a, b) => a.getTotalDistanceTravelled(a.lookup(this.speed)) - b.getTotalDistanceTravelled(b.lookup(this.speed)),
             [
-                new IntersectionBehaviour(0),
-                new YeildBehaviour(0),
+                new IntersectionBehaviour(1),
+                new YeildBehaviour(1),
                 new FollowingBehaviour(0),
                 new StopBehaviour(9, speedModifier),
-                new GoBehaviour(10, speedModifier)
+                new GoBehaviour(10, speedModifier),
+                new SpeedLimitBehaviour(2, speedModifier)
             ])
     }
 
@@ -135,7 +136,7 @@ export class Agent extends Schema {
         var l1 = this.edge.sourceVertex.location;
         var l2 = this.edge.destVertex.location;
         // TODO cache bezierPath
-        this.t = this.edge.curve.next(this.t, this.speed);
+        this.t = this.edge.curve.next(this.t, this.speed / (Simulation.TICK_RATE));
         if (this.t <= 1) {
             this.location = this.edge.curve.evaluate(this.t);
         } else { // Move on to the next vertex
@@ -212,8 +213,8 @@ export class GoBehaviour extends Behaviour<Acceleration, Agent> {
         this.speedModifier = speedModifier;
     }
 
-    public evaluate(agnet: Agent): Acceleration {
-        return new Acceleration(0, this.speedModifier, 0.1);
+    public evaluate(agent: Agent): Acceleration {
+        return new Acceleration(0, this.speedModifier * agent.edge.speed, 0.1);
     }
 
 }
@@ -228,14 +229,32 @@ export class StopBehaviour extends Behaviour<Acceleration, Agent> {
     }
 
     public evaluate(agent: Agent): Acceleration {
-        if (agent.location.distance(agent.edge.destVertex.location) <= 10 * agent.speed + 0.5 && agent.path.length > 0 && agent.path[agent.path.length - 1].currentPriority == 0) {
-            return new Acceleration(this.speedModifier, 0, 0.05);
+        if (agent.location.distance(agent.edge.destVertex.location) <= 10 * agent.speed / Simulation.TICK_RATE + 0.5 && agent.path.length > 0 && agent.path[agent.path.length - 1].currentPriority == 0) {
+            return new Acceleration(this.speedModifier * agent.edge.speed, 0, 0.05);
         } else if (agent.edge.currentPriority == 0 && agent.location.distance(agent.edge.sourceVertex.location) <= 1) {
             return new Acceleration(agent.speed, 0, 1);
         }
         return undefined;
     }
 
+}
+
+export class SpeedLimitBehaviour extends Behaviour<Acceleration, Agent> {
+    private speedModifier: number
+
+    constructor(priority: number, speedModifier: number) {
+        super(priority);
+        this.speedModifier = speedModifier;
+    }
+
+    public evaluate(agent: Agent): Acceleration {
+        if (agent.path.length > 0 &&
+            agent.edge.speed > agent.path[agent.path.length - 1].speed &&
+            agent.location.distance(agent.edge.destVertex.location) < agent.edge.speed - agent.path[agent.path.length - 1].speed) { // We should slow down
+            return new Acceleration(agent.edge.speed, agent.path[agent.path.length - 1].speed, 1 / (agent.edge.speed - agent.path[agent.path.length - 1].speed));
+        }
+        return undefined;
+    }
 }
 
 export class IntersectionBehaviour extends Behaviour<Acceleration, Agent> {
@@ -295,7 +314,7 @@ export class YeildBehaviour extends Behaviour<Acceleration, Agent> {
             if (other.edge == undefined) continue;
             // Moving toward the same point and they have the right of way
             if (agent.edge.destVertex == other.edge.destVertex && agent.edge.currentPriority < other.edge.currentPriority) {
-                var safeDistance = Math.max(10 * agent.speed, 35);
+                var safeDistance = Math.max(10 * agent.speed / (Simulation.TICK_RATE), 35);
                 var myDistance = agent.location.distance(agent.edge.destVertex.location);
                 var theirDistance = other.location.distance(agent.edge.destVertex.location);
                 // If either of us are far away from the destination, we needn't worry
@@ -319,19 +338,16 @@ export class YeildBehaviour extends Behaviour<Acceleration, Agent> {
 export class FollowingBehaviour extends Behaviour<Acceleration, Agent> {
 
     public evaluate(agent: Agent): Acceleration {
-        var xIncreasing = agent.edge.sourceVertex.location.x <= agent.edge.destVertex.location.x;
-        var yIncreasing = agent.edge.sourceVertex.location.y <= agent.edge.destVertex.location.y;
-
         var minDistance = Infinity;
 
         for (var other of agent.map.agents) {
             if (other.edge == undefined) continue;
             if (agent.edge.connectsWith(other.edge)) { // Moving toward another agent
-                var safeDistance = Math.max(10 * agent.speed, 20); // Start slowing down when within 20 units of another agent
+                var safeDistance = Math.max(10 * agent.speed / Simulation.TICK_RATE, 20); // Start slowing down when within 20 units of another agent
                 var distance = agent.location.distance(other.location);
                 if (distance < safeDistance && !(agent.location.x == other.location.x && agent.location.y == other.location.y) &&
                     (agent.edge != other.edge ||
-                        (xIncreasing == (agent.location.x <= other.location.x) && yIncreasing == (agent.location.y <= other.location.y)))) {
+                        (agent.location.distance(agent.edge.destVertex.location) > other.location.distance(other.edge.destVertex.location)))) {
                     // Adjust acceleration
                     if (distance < minDistance) {
                         minDistance = distance;

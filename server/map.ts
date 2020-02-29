@@ -42,6 +42,9 @@ export class Edge extends Schema {
     @type('number')
     readonly ctrlY: number = undefined;
 
+    @type('number')
+    readonly speed: number = 60;
+
     readonly sourceVertex: Vertex
     readonly destVertex: Vertex
 
@@ -56,13 +59,15 @@ export class Edge extends Schema {
     // Server side properties
     intersectPoints: EdgeIntersect[]
 
-    public constructor(source: Vertex, dest: Vertex, invert: boolean, priorities?: number[], ctrlX?: number, ctrlY?: number) {
+    public constructor(source: Vertex, dest: Vertex, invert: boolean, priorities?: number[], ctrlX?: number, ctrlY?: number, speed?: number) {
         super();
         this.source = source.id;
         this.dest = dest.id;
         this.sourceVertex = source;
         this.destVertex = dest;
         this.invert = invert;
+        if (speed != undefined)
+            this.speed = speed;
         this.length = this.calculateLength();
         if (priorities !== undefined && priorities.length > 0) {
             this.priorities = priorities;

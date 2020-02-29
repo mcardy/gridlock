@@ -147,6 +147,15 @@ const map_schema = {
                             9
                         ]
                     },
+                    "speed": {
+                        "$id": "#/properties/edges/items/properties/speed",
+                        "type": "integer",
+                        "title": "The speed limit of the edge in kph",
+                        "default": 60,
+                        "examples": [
+                            80
+                        ]
+                    },
                     "invert": {
                         "$id": "#/properties/edges/items/properties/invert",
                         "type": "boolean",

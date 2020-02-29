@@ -32,14 +32,14 @@ export class Simulation extends Room<SimulationState> {
     spawnRate: number;
 
     // Constant tick rate
-    readonly tickRate: number = 100;
+    static readonly TICK_RATE: number = 100;
 
 
     onCreate(options) {
         console.log("Simulation room created!", options);
         this.setState(new SimulationState());
         //this.processMap(JSON.stringify(testMap4));
-        this.setSimulationInterval((delta) => this.update(delta), 1000 / (this.state.simulationSpeed * this.tickRate));
+        this.setSimulationInterval((delta) => this.update(delta), 1000 / (this.state.simulationSpeed * Simulation.TICK_RATE));
     }
 
     processMap(map) {
@@ -83,7 +83,8 @@ export class Simulation extends Room<SimulationState> {
                 'invert' in edgeObject && edgeObject.invert == true,
                 priorities,
                 edgeObject["ctrlX"],
-                edgeObject["ctrlY"]
+                edgeObject["ctrlY"],
+                edgeObject["speed"]
             );
             this.state.map.edges.push(edge);
         }
@@ -128,7 +129,7 @@ export class Simulation extends Room<SimulationState> {
         if (!this.state.paused) {
             this.state.metrics.totalTicks = this.state.metrics.totalTicks + 1;
             this.state.metrics.throughputPerUnitTime = this.state.metrics.throughput / this.state.metrics.totalTicks;
-            if (this.state.metrics.totalTicks % this.tickRate == 0) {
+            if (this.state.metrics.totalTicks % Simulation.TICK_RATE == 0) {
                 for (var intersection of this.state.map.intersections) {
                     intersection.currentTime++;
                     if (intersection.currentTime == intersection.timings[intersection.currentIndex]) {
@@ -141,7 +142,7 @@ export class Simulation extends Room<SimulationState> {
                     }
                 }
             }
-            if (this.spawnRate != 0 && this.state.metrics.totalTicks % Math.round(this.tickRate / this.spawnRate) == 0) {
+            if (this.spawnRate != 0 && this.state.metrics.totalTicks % Math.round(Simulation.TICK_RATE / this.spawnRate) == 0) {
                 var sourceId = this.state.map.sources[this.random.integer(0, this.state.map.sources.length - 1)];
                 var source = this.state.map.findVertexById(sourceId);
                 var destinations = this.state.map.getAssignableDestinations(source);
@@ -181,7 +182,7 @@ export class Simulation extends Room<SimulationState> {
             this.processMap(data.map);
         } else if (data.command = 'setSimulationSpeed') {
             this.state.simulationSpeed = +data.speed;
-            this.setSimulationInterval((delta) => this.update(delta), 1000 / (this.state.simulationSpeed * this.tickRate));
+            this.setSimulationInterval((delta) => this.update(delta), 1000 / (this.state.simulationSpeed * Simulation.TICK_RATE));
         }
     }
 
