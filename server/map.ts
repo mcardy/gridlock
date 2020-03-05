@@ -19,7 +19,11 @@ export class Vertex extends Schema {
 }
 
 export class EdgeIntersect {
+    // The edge that the intersect was returned from
+    sourceEdge: Edge
+    // the edge that sourceEdge intersects with
     edge: Edge
+    // The point of intersection
     point: Point2D
 
     public constructor(init?: Partial<EdgeIntersect>) {
@@ -55,6 +59,8 @@ export class Edge extends Schema {
     length: number = 0
     @type('number')
     currentPriority: number = 1;
+
+    lastPriority: number = 0;
 
     // Server side properties
     intersectPoints: EdgeIntersect[]

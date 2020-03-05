@@ -94,7 +94,7 @@ class Display {
         if (map.agents) {
             var agents = map.agents;
             for (let agent of agents) {
-                let child = this.drawAgent(agent.id, agent.location.x, agent.location.y, agent.sourceId, agent.destId, agent.speed, scaler);
+                let child = this.drawAgent(agent.id, agent.location.x, agent.location.y, agent.sourceId, agent.destId, agent.speed, agent.activeBehaviour, scaler);
                 this.agentContainer.addChild(child);
                 clickables.push(child);
             }
@@ -259,12 +259,12 @@ class Display {
             return true;
         })
         if (this.isSelectedVertex(id)) {
-            this.drawUI(x, y, "[" + id + "] x: " + x + ", y: " + y, scaler);
+            this.drawUI(x, y, ["[" + id + "] x: " + x + ", y: " + y], scaler);
         }
         return circle;
     }
 
-    private drawAgent(id, x, y, source, dest, speed, scaler = 1) {
+    private drawAgent(id, x, y, source, dest, speed, activeBehaviour, scaler) {
         let circle = new PIXI.Graphics();
         circle.beginFill(this.isSelectedAgent(id) ? 0xFFFFFF : Colours.danger);
         circle.drawCircle(0, 0, 4 * scaler);
@@ -277,20 +277,20 @@ class Display {
             return true;
         })
         if (this.isSelectedAgent(id)) {
-            this.drawUI(x, y, "[" + id + "] source: " + source + ", dest: " + dest + ", speed: " + speed, scaler);
+            this.drawUI(x, y, ["ID: " + id, "Source: " + source + ", Dest: " + dest + ", Speed: " + speed, "Active Behaviour: " + activeBehaviour], scaler);
         }
         return circle;
     }
 
-    private drawUI(x: number, y: number, msg: string, scaler: number) {
+    private drawUI(x: number, y: number, msg: string[], scaler: number) {
         let container = new PIXI.Container();
         var borderWidth = 4;
         var xOffset = 6 * scaler;
         var yOffset = -4 * scaler - borderWidth;
-        let text = new PIXI.Text(msg);
+        let text = new PIXI.Text(msg.join('\n'));
         text.style = { fill: "black", font: "8pt Arial" };
         var originalHeight = text.height;
-        text.height = 8 * scaler;
+        text.height = 8 * scaler * msg.length;
         text.width = text.width * (text.height / originalHeight);
         if (scaler * x + xOffset + text.width + borderWidth > this.PixiApp.view.width) {
             xOffset = -xOffset - text.width - 2 * borderWidth;

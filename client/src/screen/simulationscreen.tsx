@@ -18,13 +18,7 @@ class SimulationMenu extends React.Component<{ room: Colyseus.Room }, {
     open: boolean, simulationSpeed: number, showSelectMapModal: boolean,
     loading: boolean, agent: number, vertex: number,
     edge: { source: number, dest: number },
-    metrics: {
-        throughput: number,
-        totalTicks: number,
-        spawned: number,
-        throughputPerUnitTime: number,
-        agents: number
-    }
+    metrics: any
 }> {
     constructor(props) {
         super(props);
@@ -33,14 +27,10 @@ class SimulationMenu extends React.Component<{ room: Colyseus.Room }, {
         display.setAgentSelectCallback(this.selectAgent.bind(this));
         this.state = { open: false, simulationSpeed: this.props.room.state.simulationSpeed, showSelectMapModal: false, loading: false, agent: undefined, edge: undefined, vertex: undefined, metrics: undefined };
         this.props.room.onStateChange(function (state: any) {
+            var metrics = state.metrics;
+            metrics.agents = state.map.agents != undefined ? state.map.agents.length : 0
             this.setState({
-                metrics: {
-                    throughput: state.metrics.throughput,
-                    totalTicks: state.metrics.totalTicks,
-                    spawned: state.metrics.spawned,
-                    throughputPerUnitTime: state.metrics.throughputPerUnitTime,
-                    agents: state.map.agents != undefined ? state.map.agents.length : 0
-                }
+                metrics: metrics
             })
         }.bind(this));
     }
@@ -95,6 +85,7 @@ class SimulationMenu extends React.Component<{ room: Colyseus.Room }, {
                     <ListGroup.Item>Throughput per Tick: {this.state.metrics.throughputPerUnitTime}</ListGroup.Item>
                     <ListGroup.Item>Spawn Count: {this.state.metrics.spawned}</ListGroup.Item>
                     <ListGroup.Item>Existing Agents: {this.state.metrics.agents}</ListGroup.Item>
+                    <ListGroup.Item>Average Trip Length: {this.state.metrics.averageTripLength}</ListGroup.Item>
                 </ListGroup></div>);
         }
         return (

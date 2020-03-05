@@ -68,6 +68,9 @@ export class Agent extends Schema {
     @type('number')
     id: number
 
+    @type('string')
+    activeBehaviour: string = "None";
+
     // The following are server-side only as they don't transmit well with colyseus due to cyclic dependencies
     t: number
     source: Vertex
@@ -101,7 +104,8 @@ export class Agent extends Schema {
                 new FollowingBehaviour(0),
                 new StopBehaviour(9, speedModifier),
                 new GoBehaviour(10, speedModifier),
-                new SpeedLimitBehaviour(2, speedModifier)
+                new IntersectionEnterBehaviour(2),
+                new SpeedLimitBehaviour(3, speedModifier)
             ])
     }
 
@@ -114,7 +118,14 @@ export class Agent extends Schema {
         if (this.edge == undefined) return;
 
         // Get a new acceleration and update speed accordingly
-        this.acceleration = this.decider.evaluate(this);
+        var newAcceleration = this.decider.evaluate(this);
+        if (newAcceleration != undefined) {
+            this.acceleration = newAcceleration.t;
+            this.activeBehaviour = newAcceleration.name;
+        } else {
+            this.acceleration = undefined;
+            this.activeBehaviour = "None";
+        }
         if (this.acceleration != undefined) {
             var newSpeed = this.acceleration.evaluate(this.acceleration.lookup(this.speed) + this.acceleration.rate);
             this.speed = newSpeed;
@@ -164,22 +175,22 @@ export class Decider<T, E> {
         this.behaviours = behaviours;
     }
 
-    public evaluate(entity: E): T {
+    public evaluate(entity: E): { t: T, name: string } {
         var priorities = this.behaviours.map((behaviour) => behaviour.getPriority()).sort((a, b) => a - b);
 
         for (var priority of priorities) {
-            var results: T[] = [];
+            var results: { t: T, name: string }[] = [];
             for (var behaviour of this.behaviours) {
                 if (priority == behaviour.getPriority()) {
-                    var result = behaviour.evaluate(entity);
-                    if (result != undefined) {
-                        results.push(result);
+                    var t = behaviour.evaluate(entity);
+                    if (t != undefined) {
+                        results.push({ t: t, name: behaviour.constructor.name });
                     }
                 }
             }
-            var result: T = undefined;
+            var result: { t: T, name: string } = undefined;
             for (var r of results) {
-                if (result == undefined || this.comparitor(result, r) >= 0) result = r;
+                if (result == undefined || this.comparitor(result.t, r.t) >= 0) result = r;
             }
             if (result != undefined) return result;
         }
@@ -215,6 +226,58 @@ export class GoBehaviour extends Behaviour<Acceleration, Agent> {
 
     public evaluate(agent: Agent): Acceleration {
         return new Acceleration(0, this.speedModifier * agent.edge.speed, 0.1);
+    }
+
+}
+
+export class IntersectionEnterBehaviour extends Behaviour<Acceleration, Agent> {
+
+    constructor(priority: number) {
+        super(priority);
+    }
+
+    public evaluate(agent: Agent): Acceleration {
+        var myDistance = agent.location.distance(agent.edge.destVertex.location);
+        if (agent.path.length > 0 && myDistance < 10) {
+            var nextEdge = agent.path[agent.path.length - 1];
+            if (nextEdge.priorities != undefined && nextEdge.priorities.length > 1) {
+                // If there is someone stopped in the intersection, we should not enter.
+                for (var other of agent.map.agents) {
+                    if (other != undefined && other.edge != undefined && other.edge == nextEdge && other.speed == 0) {
+                        var denom = myDistance;
+                        denom *= 2
+                        if (denom <= 1) denom = 1;
+                        if (agent.acceleration == undefined || agent.acceleration.start <= agent.speed) {
+                            return new Acceleration(agent.speed, 0, 1 / denom);
+                        } else {
+                            return new Acceleration(agent.acceleration.start, 0, agent.activeBehaviour == this.constructor.name ? agent.acceleration.rate : 1 / denom);
+                        }
+                    }
+                }
+                if (agent.path.length > 1) {
+                    var subsequentEdge = agent.path[agent.path.length - 2];
+                    var existsAgentOnNextEdge = 0;
+                    for (var other of agent.map.agents) {
+                        if (other != undefined && other.edge != undefined && (other.edge == nextEdge || other.edge.dest == nextEdge.dest || other.edge == subsequentEdge && other.speed != 0)) {
+                            existsAgentOnNextEdge++;
+                        }
+                    }
+                    for (var other of agent.map.agents) {
+                        if (other.edge == subsequentEdge && other.speed == 0 && other.location.distance(subsequentEdge.sourceVertex.location) < 15 * (existsAgentOnNextEdge + 1)) {
+                            var denom = myDistance;
+                            denom *= 2
+                            if (denom <= 1) denom = 1;
+                            if (agent.acceleration == undefined || agent.acceleration.start <= agent.speed) {
+                                return new Acceleration(agent.speed, 0, 1 / denom);
+                            } else {
+                                return new Acceleration(agent.acceleration.start, 0, agent.activeBehaviour == this.constructor.name ? agent.acceleration.rate : 1 / denom);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return undefined;
     }
 
 }
@@ -275,11 +338,12 @@ export class IntersectionBehaviour extends Behaviour<Acceleration, Agent> {
         var intersection: EdgeIntersect;
         for (var other of agent.map.agents) {
             if (other.edge == undefined) continue;
-            if ((intersection = this.getIntersection(agent, other)) != undefined && agent.edge.currentPriority < other.edge.currentPriority) { // Moving toward an intersection
+            if ((intersection = this.getIntersection(agent, other)) != undefined && intersection.sourceEdge.currentPriority < intersection.edge.currentPriority) { // Moving toward an intersection
                 var myDistance = agent.location.distance(intersection.point);
                 var mySafeDistance = 30;
                 var theirDistance = other.location.distance(intersection.point);
                 var theirSafeDistance = 18 + myDistance;
+                if (other.speed == 0 && theirDistance > 10) continue;
                 if (myDistance > mySafeDistance || theirDistance > theirSafeDistance) continue;
                 if (myDistance <= 15) continue; // We are committed to the turn
                 // First, are we moving toward the intersection
@@ -308,25 +372,33 @@ export class IntersectionBehaviour extends Behaviour<Acceleration, Agent> {
 export class YeildBehaviour extends Behaviour<Acceleration, Agent> {
 
     public evaluate(agent: Agent): Acceleration {
-        if (agent.edge.currentPriority == 0) return undefined;
+        //if (agent.edge.currentPriority == 0) return undefined;
 
         for (var other of agent.map.agents) {
             if (other.edge == undefined) continue;
             // Moving toward the same point and they have the right of way
-            if (agent.edge.destVertex == other.edge.destVertex && agent.edge.currentPriority < other.edge.currentPriority) {
+            if (agent.edge.destVertex == other.edge.destVertex && agent.edge != other.edge) {
                 var safeDistance = Math.max(10 * agent.speed / (Simulation.TICK_RATE), 35);
                 var myDistance = agent.location.distance(agent.edge.destVertex.location);
                 var theirDistance = other.location.distance(agent.edge.destVertex.location);
-                // If either of us are far away from the destination, we needn't worry
-                if (myDistance > safeDistance || theirDistance > safeDistance) continue;
-                if (myDistance <= 15) continue; // Committed to turn
-                // Adjust acceleration
-                var denom = myDistance - 15;
-                if (denom <= 1) denom = 1;
-                if (agent.acceleration == undefined || agent.acceleration.start <= agent.speed) {
-                    return new Acceleration(agent.speed, 0, 1 / denom);
-                } else {
-                    return new Acceleration(agent.acceleration.start, 0, 1 / denom);
+                // They have right of way
+                if ((agent.edge.currentPriority != 0 && agent.edge.currentPriority < other.edge.currentPriority) ||
+                    (agent.edge.currentPriority != 0 && other.edge.currentPriority == 0) ||
+                    // The light just turned red
+                    (agent.edge.currentPriority == 0 && other.edge.currentPriority == 0 && agent.edge.lastPriority < other.edge.lastPriority) ||
+                    // They are committed to the turn
+                    (theirDistance < 15)) {
+                    // If either of us are far away from the destination, we needn't worry
+                    if (myDistance > safeDistance || theirDistance > safeDistance) continue;
+                    if (myDistance <= 15) continue; // Committed to turn
+                    // Adjust acceleration
+                    var denom = myDistance - 15;
+                    if (denom <= 1) denom = 1;
+                    if (agent.acceleration == undefined || agent.acceleration.start <= agent.speed) {
+                        return new Acceleration(agent.speed, 0, 1 / denom);
+                    } else {
+                        return new Acceleration(agent.acceleration.start, 0, 1 / denom);
+                    }
                 }
             }
         }

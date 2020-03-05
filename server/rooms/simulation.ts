@@ -14,6 +14,8 @@ class Metrics extends Schema {
     spawned: number = 0;
     @type('number')
     throughputPerUnitTime: number = 0;
+    @type('number')
+    averageTripLength: number = 0;
 }
 
 class SimulationState extends Schema {
@@ -31,7 +33,7 @@ export class Simulation extends Room<SimulationState> {
     random: Random; // Random created for each map, server side property
     spawnRate: number;
 
-    // Constant tick rate
+    // Constant tick rate of 100 per unit time
     static readonly TICK_RATE: number = 100;
 
 
@@ -95,8 +97,8 @@ export class Simulation extends Room<SimulationState> {
 
                 var ip = e1.calculateIntersection(e2);
                 if (ip != undefined) {
-                    e1.intersectPoints.push(new EdgeIntersect({ edge: e2, point: ip }));
-                    e2.intersectPoints.push(new EdgeIntersect({ edge: e1, point: ip }));
+                    e1.intersectPoints.push(new EdgeIntersect({ edge: e2, sourceEdge: e1, point: ip }));
+                    e2.intersectPoints.push(new EdgeIntersect({ edge: e1, sourceEdge: e2, point: ip }));
                 }
             }
         }
@@ -137,6 +139,7 @@ export class Simulation extends Room<SimulationState> {
                         var nextIndex = (intersection.currentIndex + 1) % intersection.timings.length;
                         intersection.currentIndex = nextIndex;
                         for (var edge of intersection.edges) {
+                            edge.lastPriority = edge.currentPriority;
                             edge.currentPriority = +edge.priorities[nextIndex];
                         }
                     }
@@ -145,7 +148,13 @@ export class Simulation extends Room<SimulationState> {
             if (this.spawnRate != 0 && this.state.metrics.totalTicks % Math.round(Simulation.TICK_RATE / this.spawnRate) == 0) {
                 var sourceId = this.state.map.sources[this.random.integer(0, this.state.map.sources.length - 1)];
                 var source = this.state.map.findVertexById(sourceId);
-                var destinations = this.state.map.getAssignableDestinations(source);
+                var destinations = [];
+                for (var d of this.state.map.getAssignableDestinations(source)) {
+                    if (d.location.distance(source.location) > 20) {
+                        destinations.push(d);
+                    }
+                }
+
                 var dest = destinations[this.random.integer(0, destinations.length - 1)];
 
                 var agent = new Agent(source, dest, this.state.map, this.random.real(0.9, 1.1));
@@ -156,6 +165,8 @@ export class Simulation extends Room<SimulationState> {
                 agent.update();
             });
             for (agent of this.state.map.agents.filter(function (agent) { return agent.shouldDespawn() })) {
+                var tripLength = this.state.metrics.totalTicks - agent.id * Math.round(Simulation.TICK_RATE / this.spawnRate);
+                this.state.metrics.averageTripLength = (this.state.metrics.throughput * this.state.metrics.averageTripLength + tripLength) / (this.state.metrics.throughput + 1);
                 this.state.metrics.throughput = this.state.metrics.throughput + 1;
                 this.state.map.agents.splice(this.state.map.agents.indexOf(agent), 1);
             }
