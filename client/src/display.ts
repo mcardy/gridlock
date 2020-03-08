@@ -288,13 +288,13 @@ class Display {
         circle.endFill();
         circle.x = agent.location.x * this.scaler;
         circle.y = agent.location.y * this.scaler;
-        circle.hitArea = new PIXI.Circle(circle.x, circle.y, 4 * agent.scaler);
+        circle.hitArea = new PIXI.Circle(circle.x, circle.y, 4 * this.scaler);
         circle.on('customclick', (ctrlClick: boolean) => {
             this.setSelectedAgent(agent.id, ctrlClick);
             return true;
         })
         if (this.isSelectedAgent(agent.id)) {
-            this.drawUI(agent.location.x, agent.location.y, ["ID: " + agent.id, "Source: " + agent.source + ", Dest: " + agent.dest + ", Speed: " + agent.speed, "Active Behaviour: " + agent.activeBehaviour]);
+            this.drawUI(agent.location.x, agent.location.y, ["ID: " + agent.id, "Source: " + agent.sourceId + ", Dest: " + agent.destId + ", Speed: " + agent.speed, "Active Behaviour: " + agent.activeBehaviour]);
         }
         return circle;
     }

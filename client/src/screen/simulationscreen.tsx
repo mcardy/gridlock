@@ -18,14 +18,15 @@ class SimulationMenu extends React.Component<{ room: Colyseus.Room }, {
     open: boolean, simulationSpeed: number, showSelectMapModal: boolean,
     loading: boolean, agent: number, vertex: number,
     edge: { source: number, dest: number },
-    metrics: any, mapName: string, tickTarget: number
+    metrics: any, mapName: string, tickTarget: string
+    seed: string
 }> {
     constructor(props) {
         super(props);
         display.setEdgeSelectCallback(this.selectEdge.bind(this));
         display.setVertexSelectCallback(this.selectVertex.bind(this));
         display.setAgentSelectCallback(this.selectAgent.bind(this));
-        this.state = { open: false, simulationSpeed: this.props.room.state.simulationSpeed, showSelectMapModal: false, loading: false, agent: undefined, edge: undefined, vertex: undefined, metrics: undefined, mapName: undefined, tickTarget: undefined };
+        this.state = { open: false, simulationSpeed: this.props.room.state.simulationSpeed, showSelectMapModal: false, loading: false, agent: undefined, edge: undefined, vertex: undefined, metrics: undefined, mapName: undefined, tickTarget: undefined, seed: undefined };
         this.props.room.onStateChange(function (state: any) {
             var metrics = state.metrics;
             metrics.agents = state.map.agents != undefined ? state.map.agents.length : 0
@@ -55,7 +56,7 @@ class SimulationMenu extends React.Component<{ room: Colyseus.Room }, {
         this.props.room.state.map = undefined;
         this.props.room.send({ command: "setmap", map: JSON.stringify(data) });
         this.setLoading(false);
-        this.setState({ mapName: name });
+        this.setState({ mapName: name, seed: data.seed });
     }
 
     setSimulationSpeed(event) {
@@ -71,6 +72,14 @@ class SimulationMenu extends React.Component<{ room: Colyseus.Room }, {
     sendTickTarget(event) {
         this.props.room.send({ command: "setTickTarget", tickTarget: this.state.tickTarget });
         this.setState({ tickTarget: undefined });
+    }
+
+    setSeed(event) {
+        this.setState({ seed: event.target.value });
+    }
+
+    sendSeed(event) {
+        this.props.room.send({ command: "setSeed", seed: this.state.seed });
     }
 
     selectAgent(id: number) {
@@ -101,6 +110,10 @@ class SimulationMenu extends React.Component<{ room: Colyseus.Room }, {
         }
     }
 
+    reset() {
+        this.props.room.send({ command: "reset" });
+    }
+
     render() {
         var metrics = undefined;
         if (this.state.metrics != undefined) {
@@ -125,18 +138,29 @@ class SimulationMenu extends React.Component<{ room: Colyseus.Room }, {
                     <Button variant="secondary" block onClick={this.toggleSelectedMapModal.bind(this)}>Select Map</Button>
                     <Button variant="secondary" block onClick={this.toggleSimulationRunning.bind(this)} disabled={this.state.mapName == undefined}>
                         {(this.props.room.state.metrics.totalTicks == 0 || this.props.room.state.metrics.totalTicks == undefined) ? "Start" : (this.props.room.state.paused ? "Unpause" : "Pause")}</Button>
+                    <Button variant="secondary" block onClick={this.reset.bind(this)} disabled={this.state.mapName == undefined}>Reset</Button>
                     <hr></hr>
                     <div className="form-group">
                         <label>Set Simulation Speed</label>
                         <input type="range" className="custom-range" min="0.125" max="12" step="0.125" value={this.state.simulationSpeed} onChange={this.setSimulationSpeed.bind(this)} />
                     </div>
-                    <div className="form-row align-items-center">
+                    <div className="form-row align-items-center mb-1">
                         <div className="col-8" style={{ paddingRight: 0 }}>
                             <input className="form-control" type="number" placeholder="Tick count..." style={{ borderTopRightRadius: 0, borderBottomRightRadius: 0 }}
-                                value={this.state.tickTarget} onChange={this.setTickTarget.bind(this)}></input>
+                                value={this.state.tickTarget != undefined ? this.state.tickTarget : ""} onChange={this.setTickTarget.bind(this)}></input>
                         </div>
                         <div className="col-4" style={{ paddingLeft: 0 }}>
                             <Button block variant="secondary" style={{ borderTopLeftRadius: 0, borderBottomLeftRadius: 0 }} onClick={this.sendTickTarget.bind(this)}>Set Target</Button>
+                        </div>
+                        {this.props.room.state.tickTarget != undefined ? (<span className="text-muted text-center w-100">Current Target: {this.props.room.state.tickTarget}</span>) : undefined}
+                    </div>
+                    <div className="form-row align-items-center">
+                        <div className="col-8" style={{ paddingRight: 0 }}>
+                            <input className="form-control" type="number" placeholder="Seed..." style={{ borderTopRightRadius: 0, borderBottomRightRadius: 0 }}
+                                value={this.state.seed != undefined ? this.state.seed : ""} onChange={this.setSeed.bind(this)}></input>
+                        </div>
+                        <div className="col-4" style={{ paddingLeft: 0 }}>
+                            <Button block variant="secondary" style={{ borderTopLeftRadius: 0, borderBottomLeftRadius: 0 }} onClick={this.sendSeed.bind(this)}>Set Seed</Button>
                         </div>
                     </div>
                     {metrics}

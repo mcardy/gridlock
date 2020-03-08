@@ -29,12 +29,14 @@ class SimulationState extends Schema {
     simulationSpeed: number = 0.25;
     @type(Metrics)
     metrics: Metrics;
+    @type('number')
+    tickTarget: number;
 }
 
 export class Simulation extends Room<SimulationState> {
     random: Random; // Random created for each map, server side property
     spawnRate: number;
-    tickTarget: number;
+    rawMap: any;
 
     // Constant tick rate of 100 per unit time
     static readonly TICK_RATE: number = 100;
@@ -47,15 +49,21 @@ export class Simulation extends Room<SimulationState> {
         this.setSimulationInterval((delta) => this.update(delta), 1000 / (this.state.simulationSpeed * Simulation.TICK_RATE));
     }
 
-    processMap(map) {
-        Agent.nextID = 0;
+    resetMap() {
         this.state.paused = true;
-        var mapObject = JSON.parse(map)
-
-        this.random = new Random(MersenneTwister19937.seed(mapObject.seed))
+        Agent.nextID = 0;
+        this.random = new Random(MersenneTwister19937.seed(this.rawMap.seed))
         this.state.metrics = new Metrics();
-        this.spawnRate = "spawn_rate" in mapObject ? mapObject.spawn_rate : 5;
+        this.spawnRate = "spawn_rate" in this.rawMap ? this.rawMap.spawn_rate : 5;
+        this.state.map.agents = new ArraySchema<Agent>();
+    }
 
+    processMap(map) {
+        // Load new map
+        var mapObject = JSON.parse(map)
+        this.rawMap = mapObject;
+
+        // Load map into state
         this.state.map = new Map();
         this.state.map.width = mapObject.width;
         this.state.map.height = mapObject.height;
@@ -128,12 +136,13 @@ export class Simulation extends Room<SimulationState> {
             }
             this.state.map.intersections.push(intersection);
         }
-        //this.state.paused = false;
+
+        this.resetMap(); // Reset map
     }
 
     update(delta) {
-        if (this.tickTarget != undefined && this.state.metrics.totalTicks >= this.tickTarget) {
-            this.tickTarget = undefined;
+        if (this.state.tickTarget != undefined && this.state.metrics.totalTicks >= this.state.tickTarget) {
+            this.state.tickTarget = undefined;
             this.state.paused = true;
         }
         if (!this.state.paused) {
@@ -209,7 +218,12 @@ export class Simulation extends Room<SimulationState> {
             this.state.simulationSpeed = +data.speed;
             this.setSimulationInterval((delta) => this.update(delta), 1000 / (this.state.simulationSpeed * Simulation.TICK_RATE));
         } else if (data.command == 'setTickTarget') {
-            this.tickTarget = data.tickTarget;
+            this.state.tickTarget = data.tickTarget != undefined && data.tickTarget != "" ? +data.tickTarget : undefined;
+        } else if (data.command == 'setSeed') {
+            this.rawMap.seed = +data.seed;
+            this.resetMap();
+        } else if (data.command == 'reset') {
+            this.resetMap();
         }
     }
 
