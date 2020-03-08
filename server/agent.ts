@@ -99,6 +99,7 @@ export class Agent extends Schema {
         this.decider = new Decider<Acceleration, Agent>(
             (a, b) => a.getTotalDistanceTravelled(a.lookup(this.speed)) - b.getTotalDistanceTravelled(b.lookup(this.speed)),
             [
+                new CutOffBehaviour(0),
                 new IntersectionBehaviour(1),
                 new YeildBehaviour(1),
                 new FollowingBehaviour(0),
@@ -320,6 +321,37 @@ export class SpeedLimitBehaviour extends Behaviour<Acceleration, Agent> {
     }
 }
 
+export class CutOffBehaviour extends Behaviour<Acceleration, Agent> {
+    private getIntersection(agent: Agent, other: Agent): EdgeIntersect {
+        return agent.edge.intersectsWith(other.edge) ||
+            (other.path.length != 0 ? agent.edge.intersectsWith(other.path[other.path.length - 1]) : undefined) ||
+            (agent.path.length != 0 ? agent.path[agent.path.length - 1].intersectsWith(other.edge) : undefined) ||
+            (agent.path.length != 0 && other.path.length != 0 ? agent.path[agent.path.length - 1].intersectsWith(other.path[other.path.length - 1]) : undefined);
+    }
+
+    public evaluate(agent: Agent): Acceleration {
+        var intersection: EdgeIntersect;
+        for (var other of agent.map.agents) {
+            if (other.edge == undefined) continue;
+            if ((intersection = this.getIntersection(agent, other)) != undefined && intersection.sourceEdge.currentPriority > intersection.edge.currentPriority) {
+                var myDistance = agent.location.distance(intersection.point);
+                var theirDistance = other.location.distance(intersection.point);
+                if (myDistance < 15 && other.speed != 0 && theirDistance < 10) { // They've committed to the turn, we should slow down.
+                    var denom = myDistance - 10;
+                    denom *= 2
+                    if (denom <= 1) denom = 1;
+                    if (agent.acceleration == undefined || agent.acceleration.start <= agent.speed) {
+                        return new Acceleration(agent.speed, 0, 1 / denom);
+                    } else {
+                        return new Acceleration(agent.acceleration.start, 0, 1 / denom);
+                    }
+                }
+            }
+        }
+        return undefined;
+    }
+}
+
 export class IntersectionBehaviour extends Behaviour<Acceleration, Agent> {
 
     private getIntersection(agent: Agent, other: Agent): EdgeIntersect {
@@ -415,7 +447,7 @@ export class FollowingBehaviour extends Behaviour<Acceleration, Agent> {
         for (var other of agent.map.agents) {
             if (other.edge == undefined) continue;
             if (agent.edge.connectsWith(other.edge)) { // Moving toward another agent
-                var safeDistance = Math.max(10 * agent.speed / Simulation.TICK_RATE, 20); // Start slowing down when within 20 units of another agent
+                var safeDistance = 10 * agent.speed / Simulation.TICK_RATE + 10; // Start slowing down when within 20 units of another agent
                 var distance = agent.location.distance(other.location);
                 if (distance < safeDistance && !(agent.location.x == other.location.x && agent.location.y == other.location.y) &&
                     (agent.edge != other.edge ||
