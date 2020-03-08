@@ -330,10 +330,14 @@ export class CutOffBehaviour extends Behaviour<Acceleration, Agent> {
     }
 
     public evaluate(agent: Agent): Acceleration {
+        var xIncreasing = agent.edge.sourceVertex.location.x <= agent.edge.destVertex.location.x;
+        var yIncreasing = agent.edge.sourceVertex.location.y <= agent.edge.destVertex.location.y;
+
         var intersection: EdgeIntersect;
         for (var other of agent.map.agents) {
             if (other.edge == undefined) continue;
-            if ((intersection = this.getIntersection(agent, other)) != undefined && intersection.sourceEdge.currentPriority > intersection.edge.currentPriority) {
+            if ((intersection = this.getIntersection(agent, other)) != undefined && intersection.sourceEdge.currentPriority > intersection.edge.currentPriority &&
+                xIncreasing == agent.location.x <= intersection.point.x && yIncreasing == agent.location.y <= intersection.point.y) {
                 var myDistance = agent.location.distance(intersection.point);
                 var theirDistance = other.location.distance(intersection.point);
                 if (myDistance < 15 && other.speed != 0 && theirDistance < 10) { // They've committed to the turn, we should slow down.
