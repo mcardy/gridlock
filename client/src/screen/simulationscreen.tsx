@@ -112,7 +112,12 @@ class SimulationMenu extends React.Component<{ room: Colyseus.Room }, {
 }
 
 export default function runSimulation() {
-    display.PixiApp.renderer.resize(window.innerWidth - menuWidth, window.innerHeight);
+    var resize = () => {
+        display.PixiApp.renderer.resize(window.innerWidth - menuWidth, window.innerHeight);
+        display.redrawMap();
+    }
+    window.addEventListener("resize", resize);
+    resize();
     var host = window.document.location.host.replace(/:.*/, '');
     var client = new Colyseus.Client(location.protocol.replace("http", "ws") + "//" + host + (location.port ? ':' + location.port : ''));
     client.joinOrCreate("simulation").then(room => {

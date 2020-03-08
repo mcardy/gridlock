@@ -125,7 +125,13 @@ class Display {
             this.selectedVertices = [];
         }
 
-        this.drawMap(this.map);
+        this.redrawMap();
+    }
+
+    public redrawMap() {
+        if (this.map != undefined) {
+            this.drawMap(this.map);
+        }
     }
 
     public callVertexCallback(id: number) {

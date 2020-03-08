@@ -46,13 +46,13 @@ class MapEditorButton extends React.Component<MapEditorButtonProperties, {}> {
     }
 }
 
-class MapEditor extends React.Component<{ app: Display }, { json: any, loading: boolean, mapSelectModal: boolean, mapName: string, saveAsModal: boolean, addEdgeModal: boolean, sourceVertex?: number, destVertex?: number }> {
+class MapEditor extends React.Component<{ app: Display }, { json: any, loading: boolean, mapSelectModal: boolean, mapName: string, saveAsModal: boolean, addEdgeModal: boolean, sourceVertex?: number, destVertex?: number, resizing: boolean, resizingStartingX?: number, toolsWidth: number }> {
 
     editorReference: { jsonEditor: JSONEditor };
 
     constructor(props) {
         super(props);
-        this.state = { json: { width: 600, height: 400, vertices: [], edges: [] }, loading: false, mapSelectModal: false, mapName: undefined, saveAsModal: false, addEdgeModal: false };
+        this.state = { json: { width: 600, height: 400, vertices: [], edges: [] }, loading: false, mapSelectModal: false, mapName: undefined, saveAsModal: false, addEdgeModal: false, resizing: false, toolsWidth: window.innerWidth / 3 };
         display.setEdgeSelectCallback(this.selectEdge.bind(this));
         display.setVertexSelectCallback(this.selectVertex.bind(this));
         window.addEventListener("keydown", (event) => {
@@ -63,6 +63,9 @@ class MapEditor extends React.Component<{ app: Display }, { json: any, loading: 
                 this.edgeKeyBinding(event);
             }
         });
+
+        window.addEventListener("mousemove", this.resizeMouseMove.bind(this));
+        window.addEventListener("mouseup", this.resizeMouseUp.bind(this));
         this.renderMap();
     }
 
@@ -296,9 +299,38 @@ class MapEditor extends React.Component<{ app: Display }, { json: any, loading: 
         this.setState({ addEdgeModal: false });
     }
 
+    resizeMouseDown(event) {
+        this.setState({ resizing: true, resizingStartingX: event.pageX });
+        event.stopPropagation();
+        event.preventDefault();
+    }
+
+    resizeMouseUp(event) {
+        if (this.state.resizing) {
+            this.setState({ resizing: false });
+            event.stopPropagation();
+            event.preventDefault();
+        }
+    }
+
+    resizeMouseMove(event) {
+        if (this.state.resizing) {
+            var newWidth = Math.max(this.state.toolsWidth + this.state.resizingStartingX - event.pageX, 450);
+            this.setState({ toolsWidth: newWidth, resizingStartingX: newWidth != this.state.toolsWidth ? event.pageX : this.state.resizingStartingX })
+            event.stopPropagation();
+            event.preventDefault();
+        }
+    }
+
     render() {
         const buttonHeight = 60;
+        const resizeWidth = 3;
         const topPositioning = window.innerHeight - buttonHeight;
+        const toolsWidth = this.state.toolsWidth - resizeWidth;
+        const toolsLeft = window.innerWidth - toolsWidth;
+
+        display.PixiApp.renderer.resize(window.innerWidth - toolsWidth, window.innerHeight);
+        display.redrawMap();
 
         var vertices = [];
         if (this.state.addEdgeModal) {
@@ -309,16 +341,17 @@ class MapEditor extends React.Component<{ app: Display }, { json: any, loading: 
 
         return (
             <div>
-                <div style={{ position: "absolute", left: window.innerWidth / 2, top: 0, width: window.innerWidth / 2, height: window.innerHeight - (1.8 * buttonHeight) }}>
+                <div style={{ position: "absolute", left: toolsLeft - resizeWidth, top: 0, width: resizeWidth, height: window.innerHeight, cursor: "e-resize", backgroundColor: "black" }} onMouseDown={this.resizeMouseDown.bind(this)}></div>
+                <div style={{ position: "absolute", left: toolsLeft, top: 0, width: toolsWidth, height: window.innerHeight - (1.8 * buttonHeight) }}>
                     <JsonEditor schema={map_schema} ajv={new Ajv()} value={this.state.json} allowedModes={["tree", "text", "code"]} ace={ace} history={true}
                         ref={this.setEditorReference.bind(this)} onChange={this.handleEditorChange.bind(this)}></JsonEditor>
                 </div>
-                <MapEditorButton onClick={this.addVertex.bind(this)} height={buttonHeight * 0.8} width={window.innerWidth / 6} top={topPositioning - buttonHeight * 0.8} left={window.innerWidth / 2} text="Add Vertex" type="primary"></MapEditorButton>
-                <MapEditorButton onClick={this.addEdge.bind(this)} height={buttonHeight * 0.8} width={window.innerWidth / 6} top={topPositioning - buttonHeight * 0.8} left={2 * window.innerWidth / 3} text="Add Edge" type="primary"></MapEditorButton>
-                <MapEditorButton onClick={this.addIntersection.bind(this)} height={buttonHeight * 0.8} width={window.innerWidth / 6} top={topPositioning - buttonHeight * 0.8} left={5 * window.innerWidth / 6} text="Add Intersection" type="primary"></MapEditorButton>
-                <MapEditorButton onClick={this.saveMap.bind(this)} height={buttonHeight} width={window.innerWidth / 4} top={topPositioning} left={window.innerWidth / 2} text="Save" type="success" />
-                <MapEditorButton onClick={this.saveAs.bind(this)} height={buttonHeight} width={window.innerWidth / 8} top={topPositioning} left={3 * window.innerWidth / 4} text="Save As" type="danger" />
-                <MapEditorButton onClick={() => this.setState({ mapSelectModal: !this.state.mapSelectModal })} height={buttonHeight} width={window.innerWidth / 8} top={topPositioning} left={7 * window.innerWidth / 8} text="Load Map" type="warning" />
+                <MapEditorButton onClick={this.addVertex.bind(this)} height={buttonHeight * 0.8} width={toolsWidth / 3} top={topPositioning - buttonHeight * 0.8} left={toolsLeft} text="Add Vertex" type="primary"></MapEditorButton>
+                <MapEditorButton onClick={this.addEdge.bind(this)} height={buttonHeight * 0.8} width={toolsWidth / 3} top={topPositioning - buttonHeight * 0.8} left={toolsLeft + toolsWidth / 3} text="Add Edge" type="primary"></MapEditorButton>
+                <MapEditorButton onClick={this.addIntersection.bind(this)} height={buttonHeight * 0.8} width={toolsWidth / 3} top={topPositioning - buttonHeight * 0.8} left={toolsLeft + 2 * toolsWidth / 3} text="Add Intersection" type="primary"></MapEditorButton>
+                <MapEditorButton onClick={this.saveMap.bind(this)} height={buttonHeight} width={toolsWidth / 2} top={topPositioning} left={toolsLeft} text="Save" type="success" />
+                <MapEditorButton onClick={this.saveAs.bind(this)} height={buttonHeight} width={toolsWidth / 4} top={topPositioning} left={toolsLeft + toolsWidth / 2} text="Save As" type="danger" />
+                <MapEditorButton onClick={() => this.setState({ mapSelectModal: !this.state.mapSelectModal })} height={buttonHeight} width={toolsWidth / 4} top={topPositioning} left={toolsLeft + 3 * toolsWidth / 4} text="Load Map" type="warning" />
                 <MapSelect show={this.state.mapSelectModal} toggleShow={() => this.setState({ mapSelectModal: !this.state.mapSelectModal })} processMap={this.loadMap.bind(this)}></MapSelect>
                 <GetStringModal title="Save As" show={this.state.saveAsModal} toggleShow={() => this.setState({ saveAsModal: !this.state.saveAsModal })} callback={(name) => this.saveFile(name)} placeholder="Filename..." doneText="Save"></GetStringModal>
                 <LoadingOverlay enabled={this.state.loading}></LoadingOverlay>
@@ -352,8 +385,6 @@ class MapEditor extends React.Component<{ app: Display }, { json: any, loading: 
 }
 
 export default function runMapEditor() {
-    display.PixiApp.renderer.resize(window.innerWidth / 2, window.innerHeight);
-
     ReactDOM.render(
         <MapEditor app={display}></MapEditor>,
         document.getElementById("root")
