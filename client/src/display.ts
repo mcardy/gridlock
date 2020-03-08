@@ -7,9 +7,9 @@ class Display {
 
     private map;
 
-    private selectedEdge: { sourceId: number, destId: number };
-    private selectedVertex: { id: number }
-    private selectedAgent: { id: number }
+    private selectedEdges: { sourceId: number, destId: number }[] = [];
+    private selectedVertices: number[] = [];
+    private selectedAgents: number[] = [];
 
     public edgeCallback: (source: number, dest: number) => void;
     public vertexCallback: (id: number) => void;
@@ -22,6 +22,8 @@ class Display {
     private agentContainer: PIXI.Container;
 
     private uiContainer: PIXI.Container;
+
+    private scaler: number;
 
     constructor() {
         this.PixiApp = new PIXI.Application({
@@ -57,11 +59,7 @@ class Display {
 
     public drawMap(map): void {
         this.map = map;
-        var screenWidth = this.PixiApp.screen.width;
-        var screenHeight = this.PixiApp.screen.height;
-        var width = map.width;
-        var height = map.height;
-        var scaler = Math.min(screenWidth / width, screenHeight / height);
+        this.scaler = Math.min(this.PixiApp.screen.width / map.width, this.PixiApp.screen.height / map.height);
         var clickables: PIXI.DisplayObject[] = [];
 
         var vertices = map.vertices;
@@ -73,19 +71,13 @@ class Display {
         this.uiContainer.removeChildren();
 
         for (let vertex of vertices) {
-            let child = this.drawVertex(vertex.id, vertex.location.x, vertex.location.y, scaler);
+            let child = this.drawVertex(vertex);
             this.edgeContainer.addChild(child);
             clickables.push(child);
         }
         for (let edge of edges) {
             if (edge.source != NaN && edge.dest != NaN) {
-                var invert = "invert" in edge ? edge.invert : false;
-                var priority = "currentPriority" in edge ? edge.currentPriority : 1;
-                var source, dest;
-                source = vertices.find((v) => v.id == edge.source);
-                dest = vertices.find((v) => v.id == edge.dest);
-                if (source == undefined || dest == undefined) return;
-                let child = this.drawCurve(source, dest, invert, priority == 0 ? 0xFF0000 : (edge.priorities != undefined && edge.priorities.length > 1 ? 0x00FF00 : 0xFFFFFF), scaler, (edge.ctrlX == undefined || edge.ctrlY == undefined) ? undefined : new Point2D({ x: edge.ctrlX, y: edge.ctrlY }));
+                let child = this.drawCurve(edge);
                 this.edgeContainer.addChild(child);
                 clickables.push(child);
             }
@@ -94,7 +86,7 @@ class Display {
         if (map.agents) {
             var agents = map.agents;
             for (let agent of agents) {
-                let child = this.drawAgent(agent.id, agent.location.x, agent.location.y, agent.sourceId, agent.destId, agent.speed, agent.activeBehaviour, scaler);
+                let child = this.drawAgent(agent);
                 this.agentContainer.addChild(child);
                 clickables.push(child);
             }
@@ -107,51 +99,33 @@ class Display {
     }
 
     private onClick(event) {
-        var previousEdge = this.selectedEdge;
-        var previousVertex = this.selectedVertex;
-        var previousAgent = this.selectedAgent;
+        var controlClick = event.data.originalEvent.ctrlKey;
         var click = new Point2D(this.PixiApp.renderer.plugins.interaction.mouse.global);
+        var clicked = false;
         for (var child of this.clickables) {
             if (child.hitArea != undefined) {
                 if (child.hitArea.contains(click.x, click.y)) {
                     var listener = child.listeners('customclick')[0];
-                    if (listener && listener()) {
+                    if (listener && listener(controlClick)) {
+                        clicked = true;
                         break;
                     }
                 }
             }
         }
-        var redraw = false;
-        if (this.selectedEdge != undefined) {
-            if (this.selectedEdge == previousEdge) {
-                this.selectedEdge = undefined;
-                this.callEdgeCallback(undefined, undefined);
-            } else if (this.edgeCallback != undefined) {
-                this.callEdgeCallback(this.selectedEdge.sourceId, this.selectedEdge.destId);
-            }
-            redraw = true;
-        }
-        if (this.selectedVertex != undefined) {
-            if (this.selectedVertex == previousVertex) {
-                this.selectedVertex = undefined;
-                this.callVertexCallback(undefined);
-            } else if (this.vertexCallback != undefined) {
-                this.callVertexCallback(this.selectedVertex.id);
-            }
-            redraw = true;
-        }
-        if (this.selectedAgent != undefined) {
-            if (this.selectedAgent == previousAgent) {
-                this.selectedAgent = undefined;
+        if (!clicked) {
+            if (this.selectedAgents.length > 0)
                 this.callAgentCallback(undefined);
-            } else if (this.agentCallback != undefined) {
-                this.callAgentCallback(this.selectedAgent.id);
-            }
-            redraw = true;
+            this.selectedAgents = [];
+            if (this.selectedEdges.length > 0)
+                this.callEdgeCallback(undefined, undefined);
+            this.selectedEdges = [];
+            if (this.selectedVertices.length > 0)
+                this.callVertexCallback(undefined);
+            this.selectedVertices = [];
         }
-        if (redraw) {
-            this.drawMap(this.map);
-        }
+
+        this.drawMap(this.map);
     }
 
     public callVertexCallback(id: number) {
@@ -181,131 +155,168 @@ class Display {
         this.agentCallback = fn;
     }
 
-    public getSelectedEdge(): { sourceId: number, destId: number } {
-        return this.selectedEdge;
+    public getSelectedEdges(): { sourceId: number, destId: number }[] {
+        return this.selectedEdges;
     }
 
-    public getSelectedVertex(): { id: number } {
-        return this.selectedVertex;
+    public getSelectedVertices(): number[] {
+        return this.selectedVertices;
     }
 
     private isSelectedEdge(source: number, dest: number): boolean {
-        return this.selectedEdge != undefined && this.selectedEdge.sourceId == source && this.selectedEdge.destId == dest;
+        for (var edge of this.selectedEdges) {
+            if (edge.sourceId == source && edge.destId == dest) {
+                return true;
+            }
+        }
+        return false;
     }
 
-    private setSelectedEdge(source: number, dest: number): void {
-        this.selectedEdge = { sourceId: source, destId: dest };
+    private setSelectedEdge(source: number, dest: number, ctrlClick: boolean): void {
+        this.selectedVertices = [];
+        this.selectedAgents = [];
+        if (!ctrlClick) {
+            this.selectedEdges = [];
+        }
+        this.selectedEdges.push({ sourceId: source, destId: dest });
+        this.callEdgeCallback(source, dest);
     }
 
     private isSelectedVertex(id: number): boolean {
-        return this.selectedVertex != undefined && this.selectedVertex.id == id;
+        return this.selectedVertices.indexOf(id) >= 0;
     }
 
-    private setSelectedVertex(id: number): void {
-        this.selectedVertex = { id: id };
+    private setSelectedVertex(id: number, ctrlClick: boolean): void {
+        this.selectedAgents = [];
+        this.selectedEdges = [];
+        if (!ctrlClick) {
+            this.selectedVertices = [];
+        }
+        this.selectedVertices.push(id);
+        this.callVertexCallback(id);
     }
 
     private isSelectedAgent(id: number) {
-        return this.selectedAgent != undefined && this.selectedAgent.id == id;
+        return this.selectedAgents.indexOf(id) >= 0;
     }
 
-    private setSelectedAgent(id: number): void {
-        this.selectedAgent = { id: id };
+    private setSelectedAgent(id: number, ctrlClick: boolean): void {
+        this.selectedVertices = [];
+        this.selectedEdges = [];
+        if (!ctrlClick) {
+            this.selectedAgents = [];
+        }
+        this.selectedAgents.push(id);
+        this.callAgentCallback(id);
     }
 
-    private drawCurve(source, dest, invert = false, color = 0xFFFFFF, scaler = 1, origin = undefined): PIXI.DisplayObject {
+    private drawCurve(edge): PIXI.DisplayObject {
+        var priority = "currentPriority" in edge ? edge.currentPriority : 1;
+        var color = priority == 0 ? 0xFF0000 : (edge.priorities != undefined && edge.priorities.length > 1 ? 0x00FF00 : 0xFFFFFF)
+        var invert = "invert" in edge ? edge.invert : false;
+        var source, dest;
+        source = this.map.vertices.find((v) => v.id == edge.source);
+        dest = this.map.vertices.find((v) => v.id == edge.dest);
+        if (source == undefined || dest == undefined) return;
+        var origin = (edge.ctrlX == undefined || edge.ctrlY == undefined) ? undefined : new Point2D({ x: edge.ctrlX, y: edge.ctrlY });
         var l1 = source.location;
         var l2 = dest.location;
+        var labelLocation: Point2D = undefined;
         let curve = new PIXI.Graphics();
         curve.lineStyle(4, color, this.isSelectedEdge(source.id, dest.id) ? 1 : 0.5);
-        curve.moveTo(l1.x * scaler, l1.y * scaler);
+        curve.moveTo(l1.x * this.scaler, l1.y * this.scaler);
         if ((l1.x == l2.x || l1.y == l2.y) && origin == undefined) {
-            curve.lineTo(l2.x * scaler, l2.y * scaler);
+            curve.lineTo(l2.x * this.scaler, l2.y * this.scaler);
             curve.hitArea = curve.getBounds();
-            curve.on('customclick', () => {
-                this.setSelectedEdge(source.id, dest.id);
+            curve.on('customclick', (ctrlClick: boolean) => {
+                this.setSelectedEdge(source.id, dest.id, ctrlClick);
                 return true;
             });
+            labelLocation = new Point2D({ x: Math.min(l1.x, l2.x), y: (l1.y + l2.y) / 2 + (l1.y == l2.y ? 10 : 0) });
         } else {
             var path = new BezierCurve(new Point2D(l1), new Point2D(l2), invert, origin);
             var p2 = path.getStartControlPoint();
             var p3 = path.getEndControlPoint();
-            curve.bezierCurveTo(p2.x * scaler, p2.y * scaler, p3.x * scaler, p3.y * scaler, l2.x * scaler, l2.y * scaler);
+            curve.bezierCurveTo(p2.x * this.scaler, p2.y * this.scaler, p3.x * this.scaler, p3.y * this.scaler, l2.x * this.scaler, l2.y * this.scaler);
             curve.hitArea = curve.getBounds();
-            curve.on('customclick', () => {
-                var click = new Point2D(this.PixiApp.renderer.plugins.interaction.mouse.global).times(1 / scaler);
+            curve.on('customclick', (ctrlClick: boolean) => {
+                var click = new Point2D(this.PixiApp.renderer.plugins.interaction.mouse.global).times(1 / this.scaler);
                 for (var t = 0; t <= 1; t += 0.01) {
                     if (click.distance(path.evaluate(t)) < 2) {
-                        this.setSelectedEdge(source.id, dest.id);
+                        this.setSelectedEdge(source.id, dest.id, ctrlClick);
                         return true;
                     }
                 }
                 return false;
             });
+            labelLocation = path.evaluate(0.5);
+        }
+        if (this.isSelectedEdge(source.id, dest.id)) {
+            this.drawUI(labelLocation.x, labelLocation.y, ["Source: " + source.id + ", Destination: " + dest.id, "Speed Limit: " + edge.speed]);
         }
         return curve;
     }
 
-    private drawVertex(id, x, y, scaler = 1) {
+    private drawVertex(vertex) {
         let circle = new PIXI.Graphics();
-        circle.beginFill(this.isSelectedVertex(id) ? 0x99aaff : 0x9966FF);
-        circle.drawCircle(0, 0, 4 * scaler);
+        circle.beginFill(this.isSelectedVertex(vertex.id) ? 0x99aaff : 0x9966FF);
+        circle.drawCircle(0, 0, 4 * this.scaler);
         circle.endFill();
-        circle.x = x * scaler;
-        circle.y = y * scaler;
-        circle.hitArea = new PIXI.Circle(circle.x, circle.y, 4 * scaler);
-        circle.on('customclick', () => {
-            this.setSelectedVertex(id);
+        circle.x = vertex.location.x * this.scaler;
+        circle.y = vertex.location.y * this.scaler;
+        circle.hitArea = new PIXI.Circle(circle.x, circle.y, 4 * this.scaler);
+        circle.on('customclick', (ctrlClick: boolean) => {
+            this.setSelectedVertex(vertex.id, ctrlClick);
             return true;
         })
-        if (this.isSelectedVertex(id)) {
-            this.drawUI(x, y, ["[" + id + "] x: " + x + ", y: " + y], scaler);
+        if (this.isSelectedVertex(vertex.id)) {
+            this.drawUI(vertex.location.x, vertex.location.y, ["[" + vertex.id + "] x: " + vertex.location.x + ", y: " + vertex.location.y]);
         }
         return circle;
     }
 
-    private drawAgent(id, x, y, source, dest, speed, activeBehaviour, scaler) {
+    private drawAgent(agent) {
         let circle = new PIXI.Graphics();
-        circle.beginFill(this.isSelectedAgent(id) ? 0xFFFFFF : Colours.danger);
-        circle.drawCircle(0, 0, 4 * scaler);
+        circle.beginFill(this.isSelectedAgent(agent.id) ? 0xFFFFFF : Colours.danger);
+        circle.drawCircle(0, 0, 4 * this.scaler);
         circle.endFill();
-        circle.x = x * scaler;
-        circle.y = y * scaler;
-        circle.hitArea = new PIXI.Circle(circle.x, circle.y, 4 * scaler);
-        circle.on('customclick', () => {
-            this.setSelectedAgent(id);
+        circle.x = agent.location.x * this.scaler;
+        circle.y = agent.location.y * this.scaler;
+        circle.hitArea = new PIXI.Circle(circle.x, circle.y, 4 * agent.scaler);
+        circle.on('customclick', (ctrlClick: boolean) => {
+            this.setSelectedAgent(agent.id, ctrlClick);
             return true;
         })
-        if (this.isSelectedAgent(id)) {
-            this.drawUI(x, y, ["ID: " + id, "Source: " + source + ", Dest: " + dest + ", Speed: " + speed, "Active Behaviour: " + activeBehaviour], scaler);
+        if (this.isSelectedAgent(agent.id)) {
+            this.drawUI(agent.location.x, agent.location.y, ["ID: " + agent.id, "Source: " + agent.source + ", Dest: " + agent.dest + ", Speed: " + agent.speed, "Active Behaviour: " + agent.activeBehaviour]);
         }
         return circle;
     }
 
-    private drawUI(x: number, y: number, msg: string[], scaler: number) {
+    private drawUI(x: number, y: number, msg: string[]) {
         let container = new PIXI.Container();
         var borderWidth = 4;
-        var xOffset = 6 * scaler;
-        var yOffset = -4 * scaler - borderWidth;
+        var xOffset = 6 * this.scaler;
+        var yOffset = -4 * this.scaler - borderWidth;
         let text = new PIXI.Text(msg.join('\n'));
         text.style = { fill: "black", font: "8pt Arial" };
         var originalHeight = text.height;
-        text.height = 8 * scaler * msg.length;
+        text.height = 8 * this.scaler * msg.length;
         text.width = text.width * (text.height / originalHeight);
-        if (scaler * x + xOffset + text.width + borderWidth > this.PixiApp.view.width) {
+        if (this.scaler * x + xOffset + text.width + borderWidth > this.PixiApp.view.width) {
             xOffset = -xOffset - text.width - 2 * borderWidth;
-        } else if (scaler * y + yOffset + text.height + borderWidth > this.PixiApp.view.height) {
+        } else if (this.scaler * y + yOffset + text.height + borderWidth > this.PixiApp.view.height) {
             yOffset = yOffset - text.height;
             xOffset = - text.width / 2 - 2 * borderWidth;
-        } else if (scaler * y + yOffset <= 0) {
+        } else if (this.scaler * y + yOffset <= 0) {
             yOffset = yOffset + text.height + 2 * borderWidth;
             xOffset = - text.width / 2 - borderWidth;
         }
-        text.position.x = scaler * x + xOffset + borderWidth;
-        text.position.y = scaler * y + yOffset + borderWidth;
+        text.position.x = this.scaler * x + xOffset + borderWidth;
+        text.position.y = this.scaler * y + yOffset + borderWidth;
         let rect = new PIXI.Graphics();
         rect.beginFill(Colours.bgLight);
-        rect.drawRoundedRect(scaler * x + xOffset, scaler * y + yOffset, text.width + 2 * borderWidth, text.height + 2 * borderWidth, borderWidth);
+        rect.drawRoundedRect(this.scaler * x + xOffset, this.scaler * y + yOffset, text.width + 2 * borderWidth, text.height + 2 * borderWidth, borderWidth);
         container.addChild(rect);
         container.addChild(text);
         this.uiContainer.addChild(container);

@@ -57,9 +57,9 @@ class MapEditor extends React.Component<{ app: Display }, { json: any, loading: 
         display.setVertexSelectCallback(this.selectVertex.bind(this));
         window.addEventListener("keydown", (event) => {
 
-            if (display.getSelectedVertex() != undefined) {
+            if (display.getSelectedVertices().length > 0) {
                 this.vertexKeyBinding(event);
-            } else if (display.getSelectedEdge() != undefined) {
+            } else if (display.getSelectedEdges().length > 0) {
                 this.edgeKeyBinding(event);
             }
         });
@@ -67,15 +67,17 @@ class MapEditor extends React.Component<{ app: Display }, { json: any, loading: 
     }
 
     vertexKeyBinding(event: KeyboardEvent) {
-        var id = display.getSelectedVertex().id;
-        var vertex = this.findVertex(id);
-        if (vertex.index < 0) return;
         var json = this.editorReference.jsonEditor.get();
         switch (event.key) {
             case "ArrowDown":
             case "ArrowLeft":
             case "ArrowRight":
             case "ArrowUp":
+                if (display.getSelectedVertices().length != 1)
+                    break;
+                var id = display.getSelectedVertices()[0];
+                var vertex = this.findVertex(id);
+                if (vertex.index < 0) return;
                 var offsets = { "ArrowDown": [0, 1], "ArrowLeft": [-1, 0], "ArrowRight": [1, 0], "ArrowUp": [0, -1] }[event.key];
                 vertex.value.location.x += offsets[0];
                 vertex.value.location.y += offsets[1];
@@ -86,27 +88,43 @@ class MapEditor extends React.Component<{ app: Display }, { json: any, loading: 
             case "Delete":
                 var toRemove = [];
                 for (var i = 0; i < json.edges.length; i++) {
-                    if (json.edges[i].source == id || json.edges[i].dest == id) {
+                    if (display.getSelectedVertices().indexOf(json.edges[i].source) >= 0 || display.getSelectedVertices().indexOf(json.edges[i].dest) >= 0) {
                         toRemove.push(i);
                     }
                 }
+                toRemove.sort();
                 for (var i = 0; i < toRemove.length; i++) {
                     json.edges.splice(toRemove[i] - i, 1);
                 }
-                json.vertices.splice(vertex.index, 1);
+                toRemove = []
+                for (var vid of display.getSelectedVertices()) {
+                    var vertex = this.findVertex(vid);
+                    if (vertex.index < 0) continue;
+                    toRemove.push(vertex.index);
+                }
+                toRemove.sort();
+                for (var i = 0; i < toRemove.length; i++) {
+                    json.vertices.splice(toRemove[i] - i, 1);
+                }
                 this.updateJson(json);
                 break;
         }
     }
 
     edgeKeyBinding(event: KeyboardEvent) {
-        var selected = display.getSelectedEdge();
-        var edge = this.findEdge(selected.sourceId, selected.destId);
-        if (edge.index < 0) return;
         var json = this.editorReference.jsonEditor.get();
         switch (event.key) {
             case "Delete":
-                json.edges.splice(edge.index, 1);
+                var toRemove = [];
+                for (var selected of display.getSelectedEdges()) {
+                    var edge = this.findEdge(selected.sourceId, selected.destId);
+                    if (edge.index < 0) continue;
+                    toRemove.push(edge.index);
+                }
+                toRemove.sort();
+                for (var i = 0; i < toRemove.length; i++) {
+                    json.edges.splice(toRemove[i] - i, 1);
+                }
                 this.updateJson(json);
                 break;
         }
@@ -229,7 +247,15 @@ class MapEditor extends React.Component<{ app: Display }, { json: any, loading: 
     }
 
     addEdge() {
-        this.setState({ addEdgeModal: true });
+        var sourceVertex = undefined;
+        var destVertex = undefined;
+        if (display.getSelectedVertices().length > 0) {
+            sourceVertex = display.getSelectedVertices()[0];
+        }
+        if (display.getSelectedVertices().length > 1) {
+            destVertex = display.getSelectedVertices()[1];
+        }
+        this.setState({ addEdgeModal: true, sourceVertex: sourceVertex, destVertex: destVertex });
     }
 
     saveEdge() {
@@ -244,6 +270,26 @@ class MapEditor extends React.Component<{ app: Display }, { json: any, loading: 
         this.setState({ sourceVertex: undefined, destVertex: undefined });
         this.selectEdge(this.state.sourceVertex, this.state.destVertex);
         this.closeAddEdge();
+    }
+
+    addIntersection() {
+        var json = this.state.json;
+        var selectedVertices = display.getSelectedVertices();
+        var timings = [5, 1, 5, 1];
+        var intersection = { vertexIds: selectedVertices, timings: timings };
+        for (var i = 0; i < json.edges.length; i++) {
+            if (selectedVertices.indexOf(json.edges[i].source) >= 0 && selectedVertices.indexOf(json.edges[i].dest) >= 0) {
+                json.edges[i].priorities = json.edges[i].priorities == undefined ? [] : json.edges[i].priorities;
+                for (var j = json.edges[i].priorities.length; j < timings.length; j++) {
+                    json.edges[i].priorities.push(0);
+                }
+            }
+        }
+        json.intersections = json.intersections != undefined ? json.intersections : [];
+        json.intersections.push(intersection);
+        this.updateJson(json);
+        var path = { path: ["intersections", json.intersections.length - 1] };
+        this.editorReference.jsonEditor.setSelection(path, path);
     }
 
     closeAddEdge() {
@@ -263,14 +309,15 @@ class MapEditor extends React.Component<{ app: Display }, { json: any, loading: 
 
         return (
             <div>
-                <div style={{ position: "absolute", left: window.innerWidth / 2, top: 0, width: window.innerWidth / 2, height: window.innerHeight - (1.5 * buttonHeight) }}>
+                <div style={{ position: "absolute", left: window.innerWidth / 2, top: 0, width: window.innerWidth / 2, height: window.innerHeight - (1.8 * buttonHeight) }}>
                     <JsonEditor schema={map_schema} ajv={new Ajv()} value={this.state.json} allowedModes={["tree", "text", "code"]} ace={ace} history={true}
                         ref={this.setEditorReference.bind(this)} onChange={this.handleEditorChange.bind(this)}></JsonEditor>
                 </div>
-                <MapEditorButton onClick={this.addVertex.bind(this)} height={buttonHeight / 2} width={window.innerWidth / 4} top={topPositioning - buttonHeight / 2} left={window.innerWidth / 2} text="Add Vertex" type="secondary"></MapEditorButton>
-                <MapEditorButton onClick={this.addEdge.bind(this)} height={buttonHeight / 2} width={window.innerWidth / 4} top={topPositioning - buttonHeight / 2} left={3 * window.innerWidth / 4} text="Add Edge" type="secondary"></MapEditorButton>
-                <MapEditorButton onClick={this.saveMap.bind(this)} height={buttonHeight} width={window.innerWidth / 4} top={topPositioning} left={window.innerWidth / 2} text="Save" type="primary" />
-                <MapEditorButton onClick={this.saveAs.bind(this)} height={buttonHeight} width={window.innerWidth / 8} top={topPositioning} left={3 * window.innerWidth / 4} text="Save As" type="secondary" />
+                <MapEditorButton onClick={this.addVertex.bind(this)} height={buttonHeight * 0.8} width={window.innerWidth / 6} top={topPositioning - buttonHeight * 0.8} left={window.innerWidth / 2} text="Add Vertex" type="primary"></MapEditorButton>
+                <MapEditorButton onClick={this.addEdge.bind(this)} height={buttonHeight * 0.8} width={window.innerWidth / 6} top={topPositioning - buttonHeight * 0.8} left={2 * window.innerWidth / 3} text="Add Edge" type="primary"></MapEditorButton>
+                <MapEditorButton onClick={this.addIntersection.bind(this)} height={buttonHeight * 0.8} width={window.innerWidth / 6} top={topPositioning - buttonHeight * 0.8} left={5 * window.innerWidth / 6} text="Add Intersection" type="primary"></MapEditorButton>
+                <MapEditorButton onClick={this.saveMap.bind(this)} height={buttonHeight} width={window.innerWidth / 4} top={topPositioning} left={window.innerWidth / 2} text="Save" type="success" />
+                <MapEditorButton onClick={this.saveAs.bind(this)} height={buttonHeight} width={window.innerWidth / 8} top={topPositioning} left={3 * window.innerWidth / 4} text="Save As" type="danger" />
                 <MapEditorButton onClick={() => this.setState({ mapSelectModal: !this.state.mapSelectModal })} height={buttonHeight} width={window.innerWidth / 8} top={topPositioning} left={7 * window.innerWidth / 8} text="Load Map" type="warning" />
                 <MapSelect show={this.state.mapSelectModal} toggleShow={() => this.setState({ mapSelectModal: !this.state.mapSelectModal })} processMap={this.loadMap.bind(this)}></MapSelect>
                 <GetStringModal title="Save As" show={this.state.saveAsModal} toggleShow={() => this.setState({ saveAsModal: !this.state.saveAsModal })} callback={(name) => this.saveFile(name)} placeholder="Filename..." doneText="Save"></GetStringModal>
