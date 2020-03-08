@@ -16,6 +16,8 @@ class Metrics extends Schema {
     throughputPerUnitTime: number = 0;
     @type('number')
     averageTripLength: number = 0;
+    @type('number')
+    averageSpeed: number = 0;
 }
 
 class SimulationState extends Schema {
@@ -32,6 +34,7 @@ class SimulationState extends Schema {
 export class Simulation extends Room<SimulationState> {
     random: Random; // Random created for each map, server side property
     spawnRate: number;
+    tickTarget: number;
 
     // Constant tick rate of 100 per unit time
     static readonly TICK_RATE: number = 100;
@@ -45,6 +48,7 @@ export class Simulation extends Room<SimulationState> {
     }
 
     processMap(map) {
+        Agent.nextID = 0;
         this.state.paused = true;
         var mapObject = JSON.parse(map)
 
@@ -128,6 +132,10 @@ export class Simulation extends Room<SimulationState> {
     }
 
     update(delta) {
+        if (this.tickTarget != undefined && this.state.metrics.totalTicks >= this.tickTarget) {
+            this.tickTarget = undefined;
+            this.state.paused = true;
+        }
         if (!this.state.paused) {
             this.state.metrics.totalTicks = this.state.metrics.totalTicks + 1;
             this.state.metrics.throughputPerUnitTime = this.state.metrics.throughput / this.state.metrics.totalTicks;
@@ -161,10 +169,16 @@ export class Simulation extends Room<SimulationState> {
                 this.state.metrics.spawned = this.state.metrics.spawned + 1;
                 this.state.map.agents.push(agent);
             }
-            this.state.map.agents.forEach(function (agent) {
+            var speed = 0;
+            for (var agent of this.state.map.agents) {
                 agent.update();
-            });
-            for (agent of this.state.map.agents.filter(function (agent) { return agent.shouldDespawn() })) {
+                speed += agent.speed;
+            }
+            if (this.state.map.agents.length != 0)
+                speed = speed / this.state.map.agents.length;
+            this.state.metrics.averageSpeed = ((this.state.metrics.totalTicks - 1) * this.state.metrics.averageSpeed + speed) / (this.state.metrics.totalTicks);
+
+            for (var agent of this.state.map.agents.filter(function (agent) { return agent.shouldDespawn() })) {
                 var tripLength = this.state.metrics.totalTicks - agent.id * Math.round(Simulation.TICK_RATE / this.spawnRate);
                 this.state.metrics.averageTripLength = (this.state.metrics.throughput * this.state.metrics.averageTripLength + tripLength) / (this.state.metrics.throughput + 1);
                 this.state.metrics.throughput = this.state.metrics.throughput + 1;
@@ -191,9 +205,11 @@ export class Simulation extends Room<SimulationState> {
             this.state.paused = !(this.state.map != undefined && this.state.map.agents != undefined);
         } else if (data.command == 'setmap') {
             this.processMap(data.map);
-        } else if (data.command = 'setSimulationSpeed') {
+        } else if (data.command == 'setSimulationSpeed') {
             this.state.simulationSpeed = +data.speed;
             this.setSimulationInterval((delta) => this.update(delta), 1000 / (this.state.simulationSpeed * Simulation.TICK_RATE));
+        } else if (data.command == 'setTickTarget') {
+            this.tickTarget = data.tickTarget;
         }
     }
 

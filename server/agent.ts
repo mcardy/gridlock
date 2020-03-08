@@ -49,7 +49,7 @@ export class Acceleration extends Schema {
 }
 
 export class Agent extends Schema {
-    private static nextID: number = 0;
+    public static nextID: number = 0;
 
     // The following get transmitted to the client
     @type('number')
