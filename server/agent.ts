@@ -100,13 +100,14 @@ export class Agent extends Schema {
             (a, b) => a.getTotalDistanceTravelled(a.lookup(this.speed)) - b.getTotalDistanceTravelled(b.lookup(this.speed)),
             [
                 new CutOffBehaviour(0),
-                new IntersectionBehaviour(1),
+                new IntersectionBehaviour(0),
+                new IntersectionEnterBehaviour(0),
                 new YeildBehaviour(1),
-                new FollowingBehaviour(0),
+                new YeildCutOffBehaviour(1),
+                new FollowingBehaviour(2),
+                new SpeedLimitBehaviour(3, speedModifier),
                 new StopBehaviour(9, speedModifier),
-                new GoBehaviour(10, speedModifier),
-                new IntersectionEnterBehaviour(2),
-                new SpeedLimitBehaviour(3, speedModifier)
+                new GoBehaviour(10, speedModifier)
             ])
     }
 
@@ -293,7 +294,7 @@ export class StopBehaviour extends Behaviour<Acceleration, Agent> {
     }
 
     public evaluate(agent: Agent): Acceleration {
-        if (agent.location.distance(agent.edge.destVertex.location) <= 10 * agent.speed / Simulation.TICK_RATE + 0.5 && agent.path.length > 0 && agent.path[agent.path.length - 1].currentPriority == 0) {
+        if (agent.path.length > 0 && agent.path[agent.path.length - 1].currentPriority == 0 && agent.location.distance(agent.edge.destVertex.location) <= 10 * agent.speed / Simulation.TICK_RATE + 0.5) {
             return new Acceleration(this.speedModifier * agent.edge.speed, 0, 0.05);
         } else if (agent.edge.currentPriority == 0 && agent.location.distance(agent.edge.sourceVertex.location) <= 1) {
             return new Acceleration(agent.speed, 0, 1);
@@ -330,6 +331,8 @@ export class CutOffBehaviour extends Behaviour<Acceleration, Agent> {
     }
 
     public evaluate(agent: Agent): Acceleration {
+        if (agent.edge.intersectPoints.length == 0 && (agent.path.length == 0 || agent.path[agent.path.length - 1].intersectPoints.length == 0))
+            return undefined;
         var xIncreasing = agent.edge.sourceVertex.location.x <= agent.edge.destVertex.location.x;
         var yIncreasing = agent.edge.sourceVertex.location.y <= agent.edge.destVertex.location.y;
 
@@ -367,6 +370,8 @@ export class IntersectionBehaviour extends Behaviour<Acceleration, Agent> {
 
     public evaluate(agent: Agent): Acceleration {
         if (agent.edge.currentPriority == 0) return undefined;
+        if (agent.edge.intersectPoints.length == 0 && (agent.path.length == 0 || agent.path[agent.path.length - 1].intersectPoints.length == 0))
+            return undefined;
 
         var xIncreasing = agent.edge.sourceVertex.location.x <= agent.edge.destVertex.location.x;
         var yIncreasing = agent.edge.sourceVertex.location.y <= agent.edge.destVertex.location.y;
@@ -408,25 +413,24 @@ export class IntersectionBehaviour extends Behaviour<Acceleration, Agent> {
 export class YeildBehaviour extends Behaviour<Acceleration, Agent> {
 
     public evaluate(agent: Agent): Acceleration {
-        //if (agent.edge.currentPriority == 0) return undefined;
+        var safeDistance = Math.max(10 * agent.speed / (Simulation.TICK_RATE), 35);
+        var myDistance = agent.location.distance(agent.edge.destVertex.location);
+        if (myDistance > safeDistance)
+            return undefined;
+        if (myDistance <= 15)
+            return undefined; // Committed to turn
 
         for (var other of agent.map.agents) {
             if (other.edge == undefined) continue;
             // Moving toward the same point and they have the right of way
             if (agent.edge.destVertex == other.edge.destVertex && agent.edge != other.edge) {
-                var safeDistance = Math.max(10 * agent.speed / (Simulation.TICK_RATE), 35);
-                var myDistance = agent.location.distance(agent.edge.destVertex.location);
                 var theirDistance = other.location.distance(agent.edge.destVertex.location);
+                if (theirDistance > safeDistance) continue;
                 // They have right of way
                 if ((agent.edge.currentPriority != 0 && agent.edge.currentPriority < other.edge.currentPriority) ||
                     (agent.edge.currentPriority != 0 && other.edge.currentPriority == 0) ||
                     // The light just turned red
-                    (agent.edge.currentPriority == 0 && other.edge.currentPriority == 0 && agent.edge.lastPriority < other.edge.lastPriority) ||
-                    // They are committed to the turn
-                    (theirDistance < 15)) {
-                    // If either of us are far away from the destination, we needn't worry
-                    if (myDistance > safeDistance || theirDistance > safeDistance) continue;
-                    if (myDistance <= 15) continue; // Committed to turn
+                    (agent.edge.currentPriority == 0 && other.edge.currentPriority == 0 && agent.edge.lastPriority < other.edge.lastPriority)) {
                     // Adjust acceleration
                     var denom = myDistance - 15;
                     if (denom <= 1) denom = 1;
@@ -443,23 +447,52 @@ export class YeildBehaviour extends Behaviour<Acceleration, Agent> {
 
 }
 
+export class YeildCutOffBehaviour extends Behaviour<Acceleration, Agent> {
+
+    public evaluate(agent: Agent): Acceleration {
+        var safeDistance = Math.max(10 * agent.speed / (Simulation.TICK_RATE), 35);
+        var myDistance = agent.location.distance(agent.edge.destVertex.location);
+        if (myDistance > safeDistance)
+            return undefined;
+
+        for (var other of agent.map.agents) {
+            if (other.edge == undefined) continue;
+            // Moving toward the same point and they have the right of way
+            if (agent.edge.destVertex == other.edge.destVertex && agent.edge != other.edge) {
+                var theirDistance = other.location.distance(agent.edge.destVertex.location);
+                // They have committed to the turn
+                if (theirDistance < 15 && theirDistance < myDistance) {
+                    // Adjust acceleration
+                    var denom = myDistance - theirDistance;
+                    if (denom <= 1) denom = 1;
+                    if (agent.acceleration == undefined || agent.acceleration.start <= agent.speed) {
+                        return new Acceleration(agent.speed, other.speed, 1 / denom);
+                    } else {
+                        return new Acceleration(agent.acceleration.start, other.speed, 1 / denom);
+                    }
+                }
+            }
+        }
+        return undefined;
+    }
+
+}
+
 export class FollowingBehaviour extends Behaviour<Acceleration, Agent> {
 
     public evaluate(agent: Agent): Acceleration {
         var minDistance = Infinity;
+        var distanceFromDest = agent.location.distance(agent.edge.destVertex.location);
+        var safeDistance = 10 * agent.speed / Simulation.TICK_RATE + 10; // Start slowing down when within 10 + 10 * speed/unit units of another agent
 
         for (var other of agent.map.agents) {
             if (other.edge == undefined) continue;
             if (agent.edge.connectsWith(other.edge)) { // Moving toward another agent
-                var safeDistance = 10 * agent.speed / Simulation.TICK_RATE + 10; // Start slowing down when within 20 units of another agent
+                if (agent.location.x == other.location.x && agent.location.y == other.location.y) // WE are in the same place, don't consider as part of this behaviour.
+                    continue;
                 var distance = agent.location.distance(other.location);
-                if (distance < safeDistance && !(agent.location.x == other.location.x && agent.location.y == other.location.y) &&
-                    (agent.edge != other.edge ||
-                        (agent.location.distance(agent.edge.destVertex.location) > other.location.distance(other.edge.destVertex.location)))) {
-                    // Adjust acceleration
-                    if (distance < minDistance) {
-                        minDistance = distance;
-                    }
+                if (distance < minDistance && distance < safeDistance && (agent.edge != other.edge || (distanceFromDest > other.location.distance(other.edge.destVertex.location)))) {
+                    minDistance = distance; // We are the shortest valid distance!
                 }
             }
         }
