@@ -64,6 +64,7 @@ class Display {
 
         var vertices = map.vertices;
         var edges = map.edges;
+        var lanes = map.lanes != undefined ? map.lanes : [];
 
         this.vertexContainer.removeChildren();
         this.edgeContainer.removeChildren();
@@ -74,6 +75,12 @@ class Display {
             let child = this.drawVertex(vertex);
             this.edgeContainer.addChild(child);
             clickables.push(child);
+        }
+        for (let lane of lanes) {
+            for (let sourceAndDest of lane.entries) {
+                var edge = edges.find(e => e.source == sourceAndDest.source && e.dest == sourceAndDest.dest);
+                this.edgeContainer.addChild(this.drawLane(edge));
+            }
         }
         for (let edge of edges) {
             if (edge.source != NaN && edge.dest != NaN) {
@@ -216,6 +223,35 @@ class Display {
         this.callAgentCallback(id);
     }
 
+    /**
+     * @param edge Edge to draw lane around
+     * @param offset 0 => move down half the width, 1 => move up half the width, 0.5 => normal
+     * @param width The width to draw
+     */
+    private drawLane(edge, offset = 0.5, width = 8): PIXI.DisplayObject {
+        var color = 0xFFFFFF;
+        var invert = "invert" in edge ? edge.invert : false;
+        var source, dest;
+        source = this.map.vertices.find((v) => v.id == edge.source);
+        dest = this.map.vertices.find((v) => v.id == edge.dest);
+        if (source == undefined || dest == undefined) return;
+        var origin = (edge.ctrlX == undefined || edge.ctrlY == undefined) ? undefined : new Point2D({ x: edge.ctrlX, y: edge.ctrlY });
+        var l1 = source.location;
+        var l2 = dest.location;
+        let curve = new PIXI.Graphics();
+        curve.lineStyle(width * this.scaler, color, 0.125, offset);
+        curve.moveTo(l1.x * this.scaler, l1.y * this.scaler);
+        if ((l1.x == l2.x || l1.y == l2.y) && origin == undefined) {
+            curve.lineTo(l2.x * this.scaler, l2.y * this.scaler);
+        } else {
+            var path = new BezierCurve(new Point2D(l1), new Point2D(l2), invert, origin);
+            var p2 = path.getStartControlPoint();
+            var p3 = path.getEndControlPoint();
+            curve.bezierCurveTo(p2.x * this.scaler, p2.y * this.scaler, p3.x * this.scaler, p3.y * this.scaler, l2.x * this.scaler, l2.y * this.scaler);
+        }
+        return curve;
+    }
+
     private drawCurve(edge): PIXI.DisplayObject {
         var priority = "currentPriority" in edge ? edge.currentPriority : 1;
         var color = priority == 0 ? 0xFF0000 : (edge.priorities != undefined && edge.priorities.length > 1 ? 0x00FF00 : 0xFFFFFF)
@@ -229,7 +265,7 @@ class Display {
         var l2 = dest.location;
         var labelLocation: Point2D = undefined;
         let curve = new PIXI.Graphics();
-        curve.lineStyle(4, color, this.isSelectedEdge(source.id, dest.id) ? 1 : 0.5);
+        curve.lineStyle(2 * this.scaler, color, this.isSelectedEdge(source.id, dest.id) ? 1 : 0.5);
         curve.moveTo(l1.x * this.scaler, l1.y * this.scaler);
         if ((l1.x == l2.x || l1.y == l2.y) && origin == undefined) {
             curve.lineTo(l2.x * this.scaler, l2.y * this.scaler);

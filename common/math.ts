@@ -41,7 +41,36 @@ export class Point2D extends Schema {
     }
 }
 
-export class BezierCurve {
+export interface EvaluatablePath {
+    next(t: number, l: number): number;
+    evaluate(t: number): Point2D;
+}
+
+export class StraightLine implements EvaluatablePath {
+
+    private start: Point2D;
+    private end: Point2D;
+    private slope: number;
+    private length: number;
+
+    constructor(start: Point2D, end: Point2D) {
+        this.start = start;
+        this.end = end;
+        this.slope = (end.y - start.y) / (end.x - start.x);
+        this.length = start.distance(end);
+    }
+
+    public next(t: number, l: number): number {
+        return t + l / this.length;
+    }
+
+    public evaluate(t: number): Point2D {
+        return new Point2D({ x: this.start.x + (this.end.x - this.start.x) * t, y: this.start.y + (this.end.y - this.start.y) * t })
+    }
+
+}
+
+export class BezierCurve implements EvaluatablePath {
 
     private origin: Point2D;
     private p1: Point2D;
@@ -131,15 +160,6 @@ export class BezierCurve {
             last = next;
         }
         return t;
-        /*var print = (point: Point2D) => console.log(point.x + " " + point.y);
-        var v1 = this.p1.times(-3).plus(this.p2.times(9)).plus(this.p3.times(-9)).plus(this.p4.times(3));
-        var v2 = this.p1.times(6).plus(this.p2.times(-12)).plus(this.p3.times(6));
-        var v3 = this.p1.times(-3).plus(this.p2.times(3));
-        for (var i = 0; i < l; i++) {
-            var v = v1.times(t * t).plus(v2.times(t)).plus(v3);
-            print(v);
-            t = t + 1 / (new Point2D({ x: 0, y: 0 }).distance(v));
-        }*/
     }
 
 }

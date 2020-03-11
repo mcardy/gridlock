@@ -1,4 +1,4 @@
-import { Vertex, Map, Edge, Intersection, EdgeIntersect } from '../map';
+import { Vertex, Map, Edge, Intersection, EdgeIntersect, Lane, LaneEntry } from '../map';
 import { Agent } from '../agent'
 import { Point2D, BezierCurve } from '../../common/math';
 import { Room, Delayed, Client } from 'colyseus';
@@ -102,6 +102,19 @@ export class Simulation extends Room<SimulationState> {
             );
             this.state.map.edges.push(edge);
         }
+        for (let laneObject of "lanes" in mapObject ? mapObject["lanes"] : []) {
+            var lane: Lane = new Lane();
+            for (var l of laneObject.entries) {
+                var entry: LaneEntry = new LaneEntry();
+                entry.source = l.source;
+                entry.dest = l.dest;
+                var edge = this.state.map.edges.find(e => e.source == l.source && e.dest == l.dest);
+                edge.lane = lane;
+                entry.edge = edge;
+                lane.entries.push(entry);
+            }
+            this.state.map.lanes.push(lane);
+        }
         for (let i = 0; i < this.state.map.edges.length; i++) {
             var e1 = this.state.map.edges[i];
             for (let j = i + 1; j < this.state.map.edges.length; j++) {
@@ -114,7 +127,7 @@ export class Simulation extends Room<SimulationState> {
                 }
             }
         }
-        for (const intersectionObject of mapObject["intersections"]) {
+        for (const intersectionObject of "intersections" in mapObject ? mapObject["intersections"] : []) {
             var intersection = new Intersection();
             for (var id of intersectionObject.vertexIds) {
                 intersection.vertexIds.push(id);

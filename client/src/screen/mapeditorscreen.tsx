@@ -295,6 +295,20 @@ class MapEditor extends React.Component<{ app: Display }, { json: any, loading: 
         this.editorReference.jsonEditor.setSelection(path, path);
     }
 
+    addLane() {
+        var json = this.state.json;
+        var selectedEdges = display.getSelectedEdges();
+        var entries = [];
+        for (var edge of selectedEdges) {
+            entries.push({ source: edge.sourceId, dest: edge.destId });
+        }
+        json.lanes = json.lanes != undefined ? json.lanes : [];
+        json.lanes.push({ entries: entries });
+        this.updateJson(json);
+        var path = { path: ["lanes", json.lanes.length - 1] };
+        this.editorReference.jsonEditor.setSelection(path, path);
+    }
+
     closeAddEdge() {
         this.setState({ addEdgeModal: false });
     }
@@ -346,9 +360,10 @@ class MapEditor extends React.Component<{ app: Display }, { json: any, loading: 
                     <JsonEditor schema={map_schema} ajv={new Ajv()} value={this.state.json} allowedModes={["tree", "text", "code"]} ace={ace} history={true}
                         ref={this.setEditorReference.bind(this)} onChange={this.handleEditorChange.bind(this)}></JsonEditor>
                 </div>
-                <MapEditorButton onClick={this.addVertex.bind(this)} height={buttonHeight * 0.8} width={toolsWidth / 3} top={topPositioning - buttonHeight * 0.8} left={toolsLeft} text="Add Vertex" type="primary"></MapEditorButton>
-                <MapEditorButton onClick={this.addEdge.bind(this)} height={buttonHeight * 0.8} width={toolsWidth / 3} top={topPositioning - buttonHeight * 0.8} left={toolsLeft + toolsWidth / 3} text="Add Edge" type="primary"></MapEditorButton>
-                <MapEditorButton onClick={this.addIntersection.bind(this)} height={buttonHeight * 0.8} width={toolsWidth / 3} top={topPositioning - buttonHeight * 0.8} left={toolsLeft + 2 * toolsWidth / 3} text="Add Intersection" type="primary"></MapEditorButton>
+                <MapEditorButton onClick={this.addVertex.bind(this)} height={buttonHeight * 0.8} width={toolsWidth / 4} top={topPositioning - buttonHeight * 0.8} left={toolsLeft} text="Add Vertex" type="primary"></MapEditorButton>
+                <MapEditorButton onClick={this.addEdge.bind(this)} height={buttonHeight * 0.8} width={toolsWidth / 4} top={topPositioning - buttonHeight * 0.8} left={toolsLeft + toolsWidth / 4} text="Add Edge" type="primary"></MapEditorButton>
+                <MapEditorButton onClick={this.addIntersection.bind(this)} height={buttonHeight * 0.8} width={toolsWidth / 4} top={topPositioning - buttonHeight * 0.8} left={toolsLeft + 2 * toolsWidth / 4} text="Add Intersection" type="primary"></MapEditorButton>
+                <MapEditorButton onClick={this.addLane.bind(this)} height={buttonHeight * 0.8} width={toolsWidth / 4} top={topPositioning - buttonHeight * 0.8} left={toolsLeft + 3 * toolsWidth / 4} text="Add Lanes" type="primary"></MapEditorButton>
                 <MapEditorButton onClick={this.saveMap.bind(this)} height={buttonHeight} width={toolsWidth / 2} top={topPositioning} left={toolsLeft} text="Save" type="success" />
                 <MapEditorButton onClick={this.saveAs.bind(this)} height={buttonHeight} width={toolsWidth / 4} top={topPositioning} left={toolsLeft + toolsWidth / 2} text="Save As" type="danger" />
                 <MapEditorButton onClick={() => this.setState({ mapSelectModal: !this.state.mapSelectModal })} height={buttonHeight} width={toolsWidth / 4} top={topPositioning} left={toolsLeft + 3 * toolsWidth / 4} text="Load Map" type="warning" />

@@ -1,5 +1,5 @@
 import { Schema, ArraySchema, type } from '@colyseus/schema';
-import { Point2D, BezierCurve } from '../common/math';
+import { Point2D, BezierCurve, EvaluatablePath, StraightLine } from '../common/math';
 import { Agent } from './agent'
 
 export class Vertex extends Schema {
@@ -52,7 +52,7 @@ export class Edge extends Schema {
     readonly sourceVertex: Vertex
     readonly destVertex: Vertex
 
-    readonly curve: BezierCurve
+    curve: EvaluatablePath
 
     // Derived/mutable parameters
     @type('number')
@@ -64,6 +64,8 @@ export class Edge extends Schema {
 
     // Server side properties
     intersectPoints: EdgeIntersect[]
+
+    lane: Lane
 
     public constructor(source: Vertex, dest: Vertex, invert: boolean, priorities?: number[], ctrlX?: number, ctrlY?: number, speed?: number) {
         super();
@@ -89,11 +91,6 @@ export class Edge extends Schema {
     public intersectsWith(edge: Edge): EdgeIntersect {
         // Currently, the approximation is using linear segments, will expand to bezier curves in the future
         return this.intersectPoints.find(function (ei) { return ei.edge == edge; });
-    }
-
-    public connectsWith(edge: Edge): boolean {
-        if (edge == undefined) return false;
-        return this == edge || this.dest == edge.source;// || this.source == edge.source;
     }
 
     public getControlPoint(): Point2D {
@@ -123,7 +120,6 @@ export class Edge extends Schema {
                     var r = new Point2D(linearEdge.destVertex.location.minus(p));
                     var p1 = new Point2D(bezierEdge.sourceVertex.location);
                     var p2 = new Point2D(bezierEdge.destVertex.location);
-                    // TODO more refined iteration end
                     for (var k = 2; k < 40; k++) {
                         var midpoint = bezierPath.evaluate(bezierInterval);
                         var s1 = midpoint.minus(p1);
@@ -148,14 +144,13 @@ export class Edge extends Schema {
                     var ip = bezierPath.evaluate(bezierInterval);
                     return ip;
                 } else {
-                    //console.log("HAVE NOT YET IMPLEMENTED BEZIER CURVE INTERSECTIONS");
                     return undefined;
                 }
             }
         }
     }
 
-    private calculateLength(): number { // TODO expand to 3d bezier curve
+    private calculateLength(): number {
         var source: Point2D = new Point2D(this.sourceVertex.location);
         var dest: Point2D = new Point2D(this.destVertex.location);
         if ((source.x == dest.x || source.y == dest.y) && this.getControlPoint() == undefined) {
@@ -195,6 +190,72 @@ export class Intersection extends Schema {
     edges: Edge[] = new ArraySchema<Edge>()
 }
 
+export class LaneEntry extends Schema {
+    @type('number')
+    source: number
+    @type('number')
+    dest: number
+
+    edge: Edge
+}
+
+export class Lane extends Schema {
+    @type([LaneEntry])
+    entries: LaneEntry[] = new ArraySchema<LaneEntry>();
+}
+
+export interface PathSegment {
+    getEphemeralEdge(): Edge;
+}
+
+export class LaneChangePathSegment implements PathSegment {
+    entryEdge: Edge;
+    exitEdge: Edge;
+    entryPoint: number;
+    exitPoint: number;
+
+    private ephemeralEdge = undefined;
+
+    constructor(entryEdge: Edge, exitEdge: Edge) {
+        this.entryEdge = entryEdge;
+        this.exitEdge = exitEdge;
+        this.entryPoint = 0.9;
+        this.exitPoint = 1;
+    }
+
+    setPoints(entryPoint: number, exitPoint: number) {
+        this.entryPoint = entryPoint;
+        this.exitPoint = exitPoint;
+        this.setEphemeralEdge();
+    }
+
+    getEphemeralEdge(): Edge {
+        if (this.ephemeralEdge == undefined) {
+            this.setEphemeralEdge();
+        }
+        return this.ephemeralEdge;
+    }
+
+    private setEphemeralEdge() {
+        this.ephemeralEdge = new Edge(new Vertex({ location: this.entryEdge.curve.evaluate(this.entryPoint) }),
+            new Vertex({ location: this.exitEdge.curve.evaluate(this.exitPoint) }), false, [0.1], undefined, undefined, this.exitEdge.speed);
+        this.ephemeralEdge.curve = new StraightLine(this.ephemeralEdge.sourceVertex.location, this.ephemeralEdge.destVertex.location);
+    }
+
+}
+
+export class EdgePathSegment implements PathSegment {
+    edge: Edge;
+
+    constructor(edge: Edge) {
+        this.edge = edge;
+    }
+
+    getEphemeralEdge(): Edge {
+        return this.edge;
+    }
+}
+
 export class Map extends Schema {
     @type('number')
     width: number
@@ -208,6 +269,8 @@ export class Map extends Schema {
     intersections: Intersection[] = new ArraySchema<Intersection>()
     @type([Agent])
     agents: Agent[] = new ArraySchema<Agent>();
+    @type([Lane])
+    lanes: Lane[] = new ArraySchema<Lane>();
 
     sources: number[] = new ArraySchema<number>();
     destinations: number[] = new ArraySchema<number>();
@@ -234,6 +297,11 @@ export class Map extends Schema {
                 let edge: Edge;
                 for (edge of adjacencyList[current.id]) {
                     next.push(edge.destVertex);
+                    if (edge.lane != undefined) {
+                        for (var lane of edge.lane.entries) {
+                            next.push(lane.edge.destVertex);
+                        }
+                    }
                 }
             }
         }
@@ -247,10 +315,10 @@ export class Map extends Schema {
      * @param source 
      * @param dest 
      */
-    public getBestPath(source: Vertex, dest: Vertex): Edge[] {
-        type TraceableVertex = { parent: TraceableVertex, edge: Edge, node: Vertex };
+    public getBestPath(source: Vertex, dest: Vertex): PathSegment[] {
+        type TraceableVertex = { parent: TraceableVertex, edge: PathSegment, node: Vertex };
         var adjacencyList = this.getAdjacencyList();
-        var bestPath: Edge[] = null;
+        var bestPath: PathSegment[] = null;
         var visited: Vertex[] = [];
         var next: TraceableVertex[] = [{ parent: null, edge: null, node: source }];
         while (next.length != 0) {
@@ -258,7 +326,7 @@ export class Map extends Schema {
             if (visited.indexOf(current.node) >= 0) continue;
             visited.push(current.node);
             if (current.node == dest) {
-                var path: Edge[] = new ArraySchema<Edge>();
+                var path: PathSegment[] = new ArraySchema<PathSegment>();
                 var parent: TraceableVertex = current;
                 while (parent.parent != null) {
                     path.push(parent.edge);
@@ -268,10 +336,20 @@ export class Map extends Schema {
                     bestPath = path;
                 }
             }
-            if (current.node.id in adjacencyList) {
+            if (current.node != undefined && current.node.id in adjacencyList) {
                 let edge: Edge;
                 for (edge of adjacencyList[current.node.id]) {
-                    next.push({ parent: current, edge: edge, node: edge.destVertex });
+                    var pushed = { parent: current, edge: new EdgePathSegment(edge), node: edge.destVertex };
+                    next.push(pushed);
+                    if (edge.lane != undefined) {
+                        for (let lane of edge.lane.entries) {
+                            if (lane.edge != edge) {
+                                var pushedLaneChange = { parent: pushed, edge: new LaneChangePathSegment(edge, lane.edge), node: undefined };
+                                next.push(pushedLaneChange);
+                                next.push({ parent: pushedLaneChange, edge: new EdgePathSegment(lane.edge), node: lane.edge.destVertex });
+                            }
+                        }
+                    }
                 }
             }
         }

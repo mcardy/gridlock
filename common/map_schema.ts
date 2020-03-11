@@ -192,6 +192,48 @@ const map_schema = {
                 }
             }
         },
+        "lanes": {
+            "$id": "#/properties/lanes",
+            "type": "array",
+            "title": "Lanes",
+            "items": {
+                "$id": "#/properties/lanes/items",
+                "type": "object",
+                "title": "Lane",
+                "properties": {
+                    "entries": {
+                        "title": "Lane Entry",
+                        "type": "array",
+                        "items": {
+                            "$id": "#/properties/lanes/items/items",
+                            "type": "object",
+                            "title": "Source destination pairs",
+                            "default": 0,
+                            "properties": {
+                                "source": {
+                                    "$id": "#/properties/lanes/items/items/properties/source",
+                                    "type": "integer",
+                                    "title": "The ID of the source node",
+                                    "default": 0,
+                                    "examples": [
+                                        1
+                                    ]
+                                },
+                                "dest": {
+                                    "$id": "#/properties/edges/items/items/properties/dest",
+                                    "type": "integer",
+                                    "title": "The ID of the destination node",
+                                    "default": 0,
+                                    "examples": [
+                                        9
+                                    ]
+                                },
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "intersections": {
             "$id": "#/properties/intersections",
             "type": "array",

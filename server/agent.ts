@@ -1,7 +1,8 @@
 import { Schema, type } from '@colyseus/schema';
 import { Point2D, BezierCurve } from '../common/math'
-import { Vertex, Edge, EdgeIntersect, Map } from './map'
+import { Vertex, Edge, EdgeIntersect, PathSegment, EdgePathSegment, LaneChangePathSegment, Map, Lane } from './map'
 import { Simulation } from './rooms/simulation'
+import { Decider, Behaviour } from './util/behaviour'
 
 export class Acceleration extends Schema {
     @type('number')
@@ -75,8 +76,8 @@ export class Agent extends Schema {
     t: number
     source: Vertex
     dest: Vertex
-    path: Edge[]
-    edge: Edge
+    path: PathSegment[]
+    edge: PathSegment
     map: Map
     intersect: EdgeIntersect
 
@@ -94,18 +95,21 @@ export class Agent extends Schema {
         this.path = this.map.getBestPath(source, dest);
         this.edge = this.path.pop();
         this.t = 0;
-        this.speed = this.edge.speed * speedModifier;
+        this.speed = this.edge.getEphemeralEdge().speed * speedModifier;
 
         this.decider = new Decider<Acceleration, Agent>(
             (a, b) => a.getTotalDistanceTravelled(a.lookup(this.speed)) - b.getTotalDistanceTravelled(b.lookup(this.speed)),
             [
-                new CutOffBehaviour(0),
-                new IntersectionBehaviour(0),
-                new IntersectionEnterBehaviour(0),
-                new YeildBehaviour(1),
-                new YeildCutOffBehaviour(1),
-                new FollowingBehaviour(2),
-                new SpeedLimitBehaviour(3, speedModifier),
+                new LaneChangeBehaviour(0),
+                new LaneChangeGiveSpaceBehaviour(1),
+                new LaneChangeYeildBehaviour(1),
+                new CutOffBehaviour(1),
+                new IntersectionBehaviour(1),
+                new IntersectionEnterBehaviour(1),
+                new YeildBehaviour(2),
+                new YeildCutOffBehaviour(2),
+                new FollowingBehaviour(3),
+                new SpeedLimitBehaviour(5, speedModifier),
                 new StopBehaviour(9, speedModifier),
                 new GoBehaviour(10, speedModifier)
             ])
@@ -146,19 +150,21 @@ export class Agent extends Schema {
         if (this.speed <= 0.01) return;
 
         // Determine new location with bezier path
-        var l1 = this.edge.sourceVertex.location;
-        var l2 = this.edge.destVertex.location;
-        // TODO cache bezierPath
-        this.t = this.edge.curve.next(this.t, this.speed / (Simulation.TICK_RATE));
+        var l1 = this.edge.getEphemeralEdge().sourceVertex.location;
+        var l2 = this.edge.getEphemeralEdge().destVertex.location;
+        this.t = this.edge.getEphemeralEdge().curve.next(this.t, this.speed / (Simulation.TICK_RATE));
         if (this.t <= 1) {
-            this.location = this.edge.curve.evaluate(this.t);
+            this.location = this.edge.getEphemeralEdge().curve.evaluate(this.t);
         } else { // Move on to the next vertex
             this.location.x = l2.x;
             this.location.y = l2.y;
         }
-        if (this.location.x == this.edge.destVertex.location.x && this.location.y == this.edge.destVertex.location.y) {
-            this.edge = this.path.pop();
+        if (this.location.x == this.edge.getEphemeralEdge().destVertex.location.x && this.location.y == this.edge.getEphemeralEdge().destVertex.location.y) {
             this.t = 0;
+            if (this.edge instanceof LaneChangePathSegment) {
+                this.t = (this.edge as LaneChangePathSegment).exitPoint;
+            }
+            this.edge = this.path.pop();
         }
     }
 
@@ -167,57 +173,125 @@ export class Agent extends Schema {
     }
 }
 
-export class Decider<T, E> {
+export abstract class AbstractAgentBehaviour extends Behaviour<Acceleration, Agent> {
 
-    private comparitor: (a: T, b: T) => number;
-    private behaviours: Behaviour<T, E>[];
-
-    constructor(comparitor: (a: T, b: T) => number, behaviours: Behaviour<T, E>[]) {
-        this.comparitor = comparitor;
-        this.behaviours = behaviours;
+    constructor(priority: number) {
+        super(priority);
     }
 
-    public evaluate(entity: E): { t: T, name: string } {
-        var priorities = this.behaviours.map((behaviour) => behaviour.getPriority()).sort((a, b) => a - b);
+    protected getIntersection(agent: Agent, other: Agent): EdgeIntersect {
+        return agent.edge.getEphemeralEdge().intersectsWith(other.edge.getEphemeralEdge()) ||
+            (other.path.length != 0 ? agent.edge.getEphemeralEdge().intersectsWith(other.path[other.path.length - 1].getEphemeralEdge()) : undefined) ||
+            (agent.path.length != 0 ? agent.path[agent.path.length - 1].getEphemeralEdge().intersectsWith(other.edge.getEphemeralEdge()) : undefined) ||
+            (agent.path.length != 0 && other.path.length != 0 ? agent.path[agent.path.length - 1].getEphemeralEdge().intersectsWith(other.path[other.path.length - 1].getEphemeralEdge()) : undefined);
+    }
 
-        for (var priority of priorities) {
-            var results: { t: T, name: string }[] = [];
-            for (var behaviour of this.behaviours) {
-                if (priority == behaviour.getPriority()) {
-                    var t = behaviour.evaluate(entity);
-                    if (t != undefined) {
-                        results.push({ t: t, name: behaviour.constructor.name });
-                    }
+    /**
+     * For yeild behaviour
+     * @param first 
+     * @param second 
+     */
+    protected doSegmentsConjoin(first: PathSegment, second: PathSegment): boolean {
+        if (first instanceof EdgePathSegment && second instanceof EdgePathSegment) {
+            return first.getEphemeralEdge().destVertex == second.getEphemeralEdge().destVertex && first.getEphemeralEdge() != second.getEphemeralEdge();
+        }
+        // else if (first instanceof LaneChangePathSegment && second instanceof EdgePathSegment) {
+        //    return first.exitEdge == second.edge;
+        //} else if (second instanceof LaneChangePathSegment && first instanceof EdgePathSegment) {
+        //    return second.exitEdge == first.edge;
+        //}
+        return false;
+    }
+
+    /**
+     * For following behaviour
+     * @param first 
+     * @param second 
+     */
+    protected doSegmentsConnect(first: PathSegment, second: PathSegment, firstT: number, secondT: number): boolean {
+        if (first instanceof EdgePathSegment && second instanceof EdgePathSegment) {
+            return (first.getEphemeralEdge() == second.getEphemeralEdge() && firstT <= secondT) || first.getEphemeralEdge().dest == second.getEphemeralEdge().source;
+        } else if (first instanceof EdgePathSegment && second instanceof LaneChangePathSegment) {
+            return first.edge == second.entryEdge && firstT < second.exitPoint;
+        } else if (first instanceof LaneChangePathSegment && second instanceof EdgePathSegment) {
+            return (first.exitEdge == second.edge && first.exitPoint <= secondT) || first.exitEdge.dest == second.edge.source;
+        }
+        return false;
+    }
+
+}
+
+export class LaneChangeYeildBehaviour extends AbstractAgentBehaviour {
+    public evaluate(agent: Agent) {
+        if (agent.edge instanceof LaneChangePathSegment && agent.t < 0.10) {
+            for (var other of agent.map.agents) {
+                if (other.edge == undefined) continue;
+                // Moving toward the same point and they have the right of way
+                if (other.edge.getEphemeralEdge() == agent.edge.exitEdge && other.t < agent.edge.exitPoint) {
+                    var theirDistance = other.location.distance(agent.edge.getEphemeralEdge().destVertex.location);
+                    var theirSafeDistance = 15 + 10 * other.speed / Simulation.TICK_RATE;
+                    if (theirDistance > theirSafeDistance) continue;
+                    // They have right of way
+                    // Adjust acceleration
+                    return new Acceleration(agent.speed, 0, 1);
                 }
             }
-            var result: { t: T, name: string } = undefined;
-            for (var r of results) {
-                if (result == undefined || this.comparitor(result.t, r.t) >= 0) result = r;
-            }
-            if (result != undefined) return result;
         }
         return undefined;
     }
-
 }
 
-export abstract class Behaviour<T, E> {
-
-    private priority: number;
-
-    constructor(priority: number) {
-        this.priority = priority;
+export class LaneChangeGiveSpaceBehaviour extends AbstractAgentBehaviour {
+    public evaluate(agent: Agent) {
+        if (agent.edge instanceof EdgePathSegment) {
+            for (var other of agent.map.agents) {
+                if (other.edge == undefined) continue;
+                if (other.edge instanceof LaneChangePathSegment && other.edge.exitEdge == agent.edge.edge && agent.t < other.edge.exitPoint) {
+                    var myDistance = agent.location.distance(other.edge.getEphemeralEdge().destVertex.location);
+                    var adjustedDistance = myDistance - 10 * agent.speed / Simulation.TICK_RATE;
+                    if (adjustedDistance > 10 && other.t > 0.10) {
+                        var denom = adjustedDistance;
+                        if (agent.acceleration == undefined || agent.acceleration.start <= agent.speed) {
+                            return new Acceleration(agent.speed, agent.speed / 4, 1 / denom);
+                        } else {
+                            return new Acceleration(agent.acceleration.start, agent.speed / 4, 1 / denom);
+                        }
+                    }
+                }
+            }
+        }
+        return undefined;
     }
-
-    public getPriority(): number {
-        return this.priority;
-    }
-
-    public abstract evaluate(entity: E): T;
-
 }
 
-export class GoBehaviour extends Behaviour<Acceleration, Agent> {
+export class LaneChangeBehaviour extends AbstractAgentBehaviour {
+    public evaluate(agent: Agent) {
+        if (agent.path.length > 0 && agent.path[agent.path.length - 1] instanceof LaneChangePathSegment) {
+            var laneChange: LaneChangePathSegment = agent.path[agent.path.length - 1] as LaneChangePathSegment;
+            var nextT = laneChange.exitEdge.curve.next(agent.t, 10 * agent.speed / Simulation.TICK_RATE)
+            var location = laneChange.exitEdge.curve.evaluate(nextT);
+            var safeDistance = 20 + 10 * agent.speed / Simulation.TICK_RATE;
+            var isSafe = true;
+            for (var other of agent.map.agents) {
+                if (other.edge != undefined && other.edge.getEphemeralEdge() == laneChange.exitEdge) {
+                    var distance = other.location.distance(location);
+                    if (distance < safeDistance) {
+                        isSafe = false;
+                    }
+                }
+            }
+            if (isSafe || agent.location.distance(agent.edge.getEphemeralEdge().destVertex.location) < 15) {
+                agent.path.pop();
+                laneChange.setPoints(agent.t, nextT);
+                agent.edge = laneChange;
+                agent.t = 0;
+            }
+        }
+        return undefined;
+    }
+}
+
+export class GoBehaviour extends AbstractAgentBehaviour {
 
     private speedModifier: number
 
@@ -227,25 +301,25 @@ export class GoBehaviour extends Behaviour<Acceleration, Agent> {
     }
 
     public evaluate(agent: Agent): Acceleration {
-        return new Acceleration(0, this.speedModifier * agent.edge.speed, 0.1);
+        return new Acceleration(0, this.speedModifier * agent.edge.getEphemeralEdge().speed, 0.1);
     }
 
 }
 
-export class IntersectionEnterBehaviour extends Behaviour<Acceleration, Agent> {
+export class IntersectionEnterBehaviour extends AbstractAgentBehaviour {
 
     constructor(priority: number) {
         super(priority);
     }
 
     public evaluate(agent: Agent): Acceleration {
-        var myDistance = agent.location.distance(agent.edge.destVertex.location);
+        var myDistance = agent.location.distance(agent.edge.getEphemeralEdge().destVertex.location);
         if (agent.path.length > 0 && myDistance < 10) {
-            var nextEdge = agent.path[agent.path.length - 1];
+            var nextEdge = agent.path[agent.path.length - 1].getEphemeralEdge();
             if (nextEdge.priorities != undefined && nextEdge.priorities.length > 1) {
                 // If there is someone stopped in the intersection, we should not enter.
                 for (var other of agent.map.agents) {
-                    if (other != undefined && other.edge != undefined && other.edge == nextEdge && other.speed == 0) {
+                    if (other != undefined && other.edge != undefined && other.edge.getEphemeralEdge() == nextEdge && other.speed == 0) {
                         var denom = myDistance;
                         denom *= 2
                         if (denom <= 1) denom = 1;
@@ -257,15 +331,15 @@ export class IntersectionEnterBehaviour extends Behaviour<Acceleration, Agent> {
                     }
                 }
                 if (agent.path.length > 1) {
-                    var subsequentEdge = agent.path[agent.path.length - 2];
+                    var subsequentEdge = agent.path[agent.path.length - 2].getEphemeralEdge();
                     var existsAgentOnNextEdge = 0;
                     for (var other of agent.map.agents) {
-                        if (other != undefined && other.edge != undefined && (other.edge == nextEdge || other.edge.dest == nextEdge.dest || other.edge == subsequentEdge && other.speed != 0)) {
+                        if (other != undefined && other.edge != undefined && (other.edge.getEphemeralEdge() == nextEdge || other.edge.getEphemeralEdge().dest == nextEdge.dest || other.edge.getEphemeralEdge() == subsequentEdge && other.speed != 0)) {
                             existsAgentOnNextEdge++;
                         }
                     }
                     for (var other of agent.map.agents) {
-                        if (other.edge == subsequentEdge && other.speed == 0 && other.location.distance(subsequentEdge.sourceVertex.location) < 15 * (existsAgentOnNextEdge + 1)) {
+                        if (other != undefined && other.edge != undefined && other.edge.getEphemeralEdge() == subsequentEdge && other.speed == 0 && other.location.distance(subsequentEdge.sourceVertex.location) < 15 * (existsAgentOnNextEdge) + 5) {
                             var denom = myDistance;
                             denom *= 2
                             if (denom <= 1) denom = 1;
@@ -284,7 +358,7 @@ export class IntersectionEnterBehaviour extends Behaviour<Acceleration, Agent> {
 
 }
 
-export class StopBehaviour extends Behaviour<Acceleration, Agent> {
+export class StopBehaviour extends AbstractAgentBehaviour {
 
     private speedModifier: number
 
@@ -294,9 +368,9 @@ export class StopBehaviour extends Behaviour<Acceleration, Agent> {
     }
 
     public evaluate(agent: Agent): Acceleration {
-        if (agent.path.length > 0 && agent.path[agent.path.length - 1].currentPriority == 0 && agent.location.distance(agent.edge.destVertex.location) <= 10 * agent.speed / Simulation.TICK_RATE + 0.5) {
-            return new Acceleration(this.speedModifier * agent.edge.speed, 0, 0.05);
-        } else if (agent.edge.currentPriority == 0 && agent.location.distance(agent.edge.sourceVertex.location) <= 1) {
+        if (agent.path.length > 0 && agent.path[agent.path.length - 1].getEphemeralEdge().currentPriority == 0 && agent.location.distance(agent.edge.getEphemeralEdge().destVertex.location) <= 10 * agent.speed / Simulation.TICK_RATE + 0.5) {
+            return new Acceleration(this.speedModifier * agent.edge.getEphemeralEdge().speed, 0, 0.05);
+        } else if (agent.edge.getEphemeralEdge().currentPriority == 0 && agent.location.distance(agent.edge.getEphemeralEdge().sourceVertex.location) <= 1) {
             return new Acceleration(agent.speed, 0, 1);
         }
         return undefined;
@@ -304,7 +378,7 @@ export class StopBehaviour extends Behaviour<Acceleration, Agent> {
 
 }
 
-export class SpeedLimitBehaviour extends Behaviour<Acceleration, Agent> {
+export class SpeedLimitBehaviour extends AbstractAgentBehaviour {
     private speedModifier: number
 
     constructor(priority: number, speedModifier: number) {
@@ -314,27 +388,21 @@ export class SpeedLimitBehaviour extends Behaviour<Acceleration, Agent> {
 
     public evaluate(agent: Agent): Acceleration {
         if (agent.path.length > 0 &&
-            agent.edge.speed > agent.path[agent.path.length - 1].speed &&
-            agent.location.distance(agent.edge.destVertex.location) < agent.edge.speed - agent.path[agent.path.length - 1].speed) { // We should slow down
-            return new Acceleration(agent.edge.speed, agent.path[agent.path.length - 1].speed, 1 / (agent.edge.speed - agent.path[agent.path.length - 1].speed));
+            agent.edge.getEphemeralEdge().speed > agent.path[agent.path.length - 1].getEphemeralEdge().speed &&
+            agent.location.distance(agent.edge.getEphemeralEdge().destVertex.location) < agent.edge.getEphemeralEdge().speed - agent.path[agent.path.length - 1].getEphemeralEdge().speed) { // We should slow down
+            return new Acceleration(agent.edge.getEphemeralEdge().speed, agent.path[agent.path.length - 1].getEphemeralEdge().speed, 1 / (agent.edge.getEphemeralEdge().speed - agent.path[agent.path.length - 1].getEphemeralEdge().speed));
         }
         return undefined;
     }
 }
 
-export class CutOffBehaviour extends Behaviour<Acceleration, Agent> {
-    private getIntersection(agent: Agent, other: Agent): EdgeIntersect {
-        return agent.edge.intersectsWith(other.edge) ||
-            (other.path.length != 0 ? agent.edge.intersectsWith(other.path[other.path.length - 1]) : undefined) ||
-            (agent.path.length != 0 ? agent.path[agent.path.length - 1].intersectsWith(other.edge) : undefined) ||
-            (agent.path.length != 0 && other.path.length != 0 ? agent.path[agent.path.length - 1].intersectsWith(other.path[other.path.length - 1]) : undefined);
-    }
+export class CutOffBehaviour extends AbstractAgentBehaviour {
 
     public evaluate(agent: Agent): Acceleration {
-        if (agent.edge.intersectPoints.length == 0 && (agent.path.length == 0 || agent.path[agent.path.length - 1].intersectPoints.length == 0))
+        if (agent.edge.getEphemeralEdge().intersectPoints.length == 0 && (agent.path.length == 0 || agent.path[agent.path.length - 1].getEphemeralEdge().intersectPoints.length == 0))
             return undefined;
-        var xIncreasing = agent.edge.sourceVertex.location.x <= agent.edge.destVertex.location.x;
-        var yIncreasing = agent.edge.sourceVertex.location.y <= agent.edge.destVertex.location.y;
+        var xIncreasing = agent.edge.getEphemeralEdge().sourceVertex.location.x <= agent.edge.getEphemeralEdge().destVertex.location.x;
+        var yIncreasing = agent.edge.getEphemeralEdge().sourceVertex.location.y <= agent.edge.getEphemeralEdge().destVertex.location.y;
 
         var intersection: EdgeIntersect;
         for (var other of agent.map.agents) {
@@ -359,22 +427,15 @@ export class CutOffBehaviour extends Behaviour<Acceleration, Agent> {
     }
 }
 
-export class IntersectionBehaviour extends Behaviour<Acceleration, Agent> {
-
-    private getIntersection(agent: Agent, other: Agent): EdgeIntersect {
-        return agent.edge.intersectsWith(other.edge) ||
-            (other.path.length != 0 ? agent.edge.intersectsWith(other.path[other.path.length - 1]) : undefined) ||
-            (agent.path.length != 0 ? agent.path[agent.path.length - 1].intersectsWith(other.edge) : undefined) ||
-            (agent.path.length != 0 && other.path.length != 0 ? agent.path[agent.path.length - 1].intersectsWith(other.path[other.path.length - 1]) : undefined);
-    }
+export class IntersectionBehaviour extends AbstractAgentBehaviour {
 
     public evaluate(agent: Agent): Acceleration {
-        if (agent.edge.currentPriority == 0) return undefined;
-        if (agent.edge.intersectPoints.length == 0 && (agent.path.length == 0 || agent.path[agent.path.length - 1].intersectPoints.length == 0))
+        if (agent.edge.getEphemeralEdge().currentPriority == 0) return undefined;
+        if (agent.edge.getEphemeralEdge().intersectPoints.length == 0 && (agent.path.length == 0 || agent.path[agent.path.length - 1].getEphemeralEdge().intersectPoints.length == 0))
             return undefined;
 
-        var xIncreasing = agent.edge.sourceVertex.location.x <= agent.edge.destVertex.location.x;
-        var yIncreasing = agent.edge.sourceVertex.location.y <= agent.edge.destVertex.location.y;
+        var xIncreasing = agent.edge.getEphemeralEdge().sourceVertex.location.x <= agent.edge.getEphemeralEdge().destVertex.location.x;
+        var yIncreasing = agent.edge.getEphemeralEdge().sourceVertex.location.y <= agent.edge.getEphemeralEdge().destVertex.location.y;
 
         var intersection: EdgeIntersect;
         for (var other of agent.map.agents) {
@@ -390,10 +451,10 @@ export class IntersectionBehaviour extends Behaviour<Acceleration, Agent> {
                 // First, are we moving toward the intersection
                 if (xIncreasing == agent.location.x <= intersection.point.x && yIncreasing == agent.location.y <= intersection.point.y
                     // And are they moving toward the intersection?
-                    && (other.edge.sourceVertex.location.x == other.edge.destVertex.location.x ||
-                        other.edge.sourceVertex.location.x < other.edge.destVertex.location.x == other.location.x <= intersection.point.x)
-                    && (other.edge.sourceVertex.location.y == other.edge.destVertex.location.y ||
-                        other.edge.sourceVertex.location.y < other.edge.destVertex.location.y == other.location.y <= intersection.point.y)) {
+                    && (other.edge.getEphemeralEdge().sourceVertex.location.x == other.edge.getEphemeralEdge().destVertex.location.x ||
+                        other.edge.getEphemeralEdge().sourceVertex.location.x < other.edge.getEphemeralEdge().destVertex.location.x == other.location.x <= intersection.point.x)
+                    && (other.edge.getEphemeralEdge().sourceVertex.location.y == other.edge.getEphemeralEdge().destVertex.location.y ||
+                        other.edge.getEphemeralEdge().sourceVertex.location.y < other.edge.getEphemeralEdge().destVertex.location.y == other.location.y <= intersection.point.y)) {
                     // Adjust acceleration to slow down 10 units away
                     var denom = myDistance - 15;
                     denom *= 2
@@ -410,11 +471,11 @@ export class IntersectionBehaviour extends Behaviour<Acceleration, Agent> {
     }
 }
 
-export class YeildBehaviour extends Behaviour<Acceleration, Agent> {
+export class YeildBehaviour extends AbstractAgentBehaviour {
 
     public evaluate(agent: Agent): Acceleration {
-        var safeDistance = Math.max(10 * agent.speed / (Simulation.TICK_RATE), 35);
-        var myDistance = agent.location.distance(agent.edge.destVertex.location);
+        var safeDistance = 20 + 10 * agent.speed / Simulation.TICK_RATE;
+        var myDistance = agent.location.distance(agent.edge.getEphemeralEdge().destVertex.location);
         if (myDistance > safeDistance)
             return undefined;
         if (myDistance <= 15)
@@ -423,14 +484,16 @@ export class YeildBehaviour extends Behaviour<Acceleration, Agent> {
         for (var other of agent.map.agents) {
             if (other.edge == undefined) continue;
             // Moving toward the same point and they have the right of way
-            if (agent.edge.destVertex == other.edge.destVertex && agent.edge != other.edge) {
-                var theirDistance = other.location.distance(agent.edge.destVertex.location);
-                if (theirDistance > safeDistance) continue;
+            if (this.doSegmentsConjoin(agent.edge, other.edge)) {
+                var theirDistance = other.location.distance(agent.edge.getEphemeralEdge().destVertex.location);
+                var theirSafeDistance = 20 + 10 * other.speed / Simulation.TICK_RATE;
+                if (theirDistance > theirSafeDistance) continue;
                 // They have right of way
-                if ((agent.edge.currentPriority != 0 && agent.edge.currentPriority < other.edge.currentPriority) ||
-                    (agent.edge.currentPriority != 0 && other.edge.currentPriority == 0) ||
+                if ((agent.edge.getEphemeralEdge().currentPriority != 0 && agent.edge.getEphemeralEdge().currentPriority < other.edge.getEphemeralEdge().currentPriority) ||
+                    (agent.edge.getEphemeralEdge().currentPriority != 0 && other.edge.getEphemeralEdge().currentPriority == 0) ||
                     // The light just turned red
-                    (agent.edge.currentPriority == 0 && other.edge.currentPriority == 0 && agent.edge.lastPriority < other.edge.lastPriority)) {
+                    (agent.edge.getEphemeralEdge().currentPriority == 0 && other.edge.getEphemeralEdge().currentPriority == 0 &&
+                        agent.edge.getEphemeralEdge().lastPriority < other.edge.getEphemeralEdge().lastPriority)) {
                     // Adjust acceleration
                     var denom = myDistance - 15;
                     if (denom <= 1) denom = 1;
@@ -447,19 +510,19 @@ export class YeildBehaviour extends Behaviour<Acceleration, Agent> {
 
 }
 
-export class YeildCutOffBehaviour extends Behaviour<Acceleration, Agent> {
+export class YeildCutOffBehaviour extends AbstractAgentBehaviour {
 
     public evaluate(agent: Agent): Acceleration {
-        var safeDistance = Math.max(10 * agent.speed / (Simulation.TICK_RATE), 35);
-        var myDistance = agent.location.distance(agent.edge.destVertex.location);
+        var safeDistance = 20 + 10 * agent.speed / Simulation.TICK_RATE;
+        var myDistance = agent.location.distance(agent.edge.getEphemeralEdge().destVertex.location);
         if (myDistance > safeDistance)
             return undefined;
 
         for (var other of agent.map.agents) {
             if (other.edge == undefined) continue;
             // Moving toward the same point and they have the right of way
-            if (agent.edge.destVertex == other.edge.destVertex && agent.edge != other.edge) {
-                var theirDistance = other.location.distance(agent.edge.destVertex.location);
+            if (this.doSegmentsConjoin(agent.edge, other.edge)) {
+                var theirDistance = other.location.distance(agent.edge.getEphemeralEdge().destVertex.location);
                 // They have committed to the turn
                 if (theirDistance < 15 && theirDistance < myDistance) {
                     // Adjust acceleration
@@ -478,20 +541,20 @@ export class YeildCutOffBehaviour extends Behaviour<Acceleration, Agent> {
 
 }
 
-export class FollowingBehaviour extends Behaviour<Acceleration, Agent> {
+export class FollowingBehaviour extends AbstractAgentBehaviour {
 
     public evaluate(agent: Agent): Acceleration {
         var minDistance = Infinity;
-        var distanceFromDest = agent.location.distance(agent.edge.destVertex.location);
+        var distanceFromDest = agent.location.distance(agent.edge.getEphemeralEdge().destVertex.location);
         var safeDistance = 10 * agent.speed / Simulation.TICK_RATE + 10; // Start slowing down when within 10 + 10 * speed/unit units of another agent
 
         for (var other of agent.map.agents) {
             if (other.edge == undefined) continue;
-            if (agent.edge.connectsWith(other.edge)) { // Moving toward another agent
+            if (this.doSegmentsConnect(agent.edge, other.edge, agent.t, other.t)) { // Moving toward another agent
                 if (agent.location.x == other.location.x && agent.location.y == other.location.y) // WE are in the same place, don't consider as part of this behaviour.
                     continue;
                 var distance = agent.location.distance(other.location);
-                if (distance < minDistance && distance < safeDistance && (agent.edge != other.edge || (distanceFromDest > other.location.distance(other.edge.destVertex.location)))) {
+                if (distance < minDistance && distance < safeDistance && (agent.edge.getEphemeralEdge() != other.edge.getEphemeralEdge() || (distanceFromDest > other.location.distance(other.edge.getEphemeralEdge().destVertex.location)))) {
                     minDistance = distance; // We are the shortest valid distance!
                 }
             }
