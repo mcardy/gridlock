@@ -176,6 +176,13 @@ class Display {
         return this.selectedVertices;
     }
 
+    public setSelectedVertices(vertices: number[]): void {
+        this.selectedAgents = [];
+        this.selectedEdges = [];
+        this.selectedVertices = vertices;
+        this.redrawMap();
+    }
+
     private isSelectedEdge(source: number, dest: number): boolean {
         for (var edge of this.selectedEdges) {
             if (edge.sourceId == source && edge.destId == dest) {
@@ -294,7 +301,15 @@ class Display {
             labelLocation = path.evaluate(0.5);
         }
         if (this.isSelectedEdge(source.id, dest.id)) {
-            this.drawUI(labelLocation.x, labelLocation.y, ["Source: " + source.id + ", Destination: " + dest.id, "Speed Limit: " + edge.speed]);
+            var text = ["Source: " + source.id + ", Destination: " + dest.id, "Speed Limit: " + edge.speed];
+            if ("priorities" in edge) {
+                if (edge.priorities.length == 1) {
+                    text.push("Priority: " + edge.priorities[0]);
+                } else {
+                    text.push("Priorities: " + edge.priorities.join(","));
+                }
+            }
+            this.drawUI(labelLocation.x, labelLocation.y, text);
         }
         return curve;
     }
@@ -312,7 +327,7 @@ class Display {
             return true;
         })
         if (this.isSelectedVertex(vertex.id)) {
-            this.drawUI(vertex.location.x, vertex.location.y, ["[" + vertex.id + "] x: " + vertex.location.x + ", y: " + vertex.location.y]);
+            this.drawUI(vertex.location.x, vertex.location.y, ["[" + vertex.id + "] x: " + vertex.location.x + ", y: " + vertex.location.y, "Source: " + vertex.source + ", " + "Dest: " + vertex.dest]);
         }
         return circle;
     }
@@ -357,7 +372,7 @@ class Display {
         text.position.x = this.scaler * x + xOffset + borderWidth;
         text.position.y = this.scaler * y + yOffset + borderWidth;
         let rect = new PIXI.Graphics();
-        rect.beginFill(Colours.bgLight);
+        rect.beginFill(Colours.bgLight, 0.8);
         rect.drawRoundedRect(this.scaler * x + xOffset, this.scaler * y + yOffset, text.width + 2 * borderWidth, text.height + 2 * borderWidth, borderWidth);
         container.addChild(rect);
         container.addChild(text);

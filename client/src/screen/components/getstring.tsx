@@ -4,11 +4,11 @@ import Modal from 'react-bootstrap/Modal';
 import Button from 'react-bootstrap/Button';
 
 
-export default class GetStringModal extends React.Component<{ title: string, show: boolean, toggleShow: () => void, callback: (name: string) => void, placeholder?: string, description?: string, doneText?: string }, { value: string }> {
+export default class GetStringModal extends React.Component<{ title: string, show: boolean, toggleShow: () => void, callback: (name: string) => void, placeholder?: string, description?: string, doneText?: string, initialValue?: string }, { value: string }> {
 
     constructor(props) {
         super(props);
-        this.state = { value: "" };
+        this.state = { value: this.props.initialValue != undefined ? this.props.initialValue : "" };
     }
 
     set() {
@@ -18,6 +18,12 @@ export default class GetStringModal extends React.Component<{ title: string, sho
 
     change(event) {
         this.setState({ value: event.target.value })
+    }
+
+    componentDidUpdate(previousProperties) {
+        if (previousProperties.initialValue != this.props.initialValue) {
+            this.setState({ value: this.props.initialValue });
+        }
     }
 
     render() {

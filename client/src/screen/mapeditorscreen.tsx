@@ -46,18 +46,30 @@ class MapEditorButton extends React.Component<MapEditorButtonProperties, {}> {
     }
 }
 
-class MapEditor extends React.Component<{ app: Display }, { json: any, loading: boolean, mapSelectModal: boolean, mapName: string, saveAsModal: boolean, addEdgeModal: boolean, sourceVertex?: number, destVertex?: number, resizing: boolean, resizingStartingX?: number, toolsWidth: number }> {
+class MapEditor extends React.Component<{ app: Display }, {
+    json: any, loading: boolean, mapSelectModal: boolean, mapName: string,
+    saveAsModal: boolean, addEdgeModal: boolean, sourceVertex?: number, destVertex?: number, resizing: boolean, resizingStartingX?: number,
+    toolsWidth: number, locationEditor: boolean, locationEditorX: number, locationEditorY: number, priorityEditor: boolean, priorityEditorValue: string
+}> {
 
     editorReference: { jsonEditor: JSONEditor };
 
     constructor(props) {
         super(props);
-        this.state = { json: { width: 600, height: 400, vertices: [], edges: [] }, loading: false, mapSelectModal: false, mapName: undefined, saveAsModal: false, addEdgeModal: false, resizing: false, toolsWidth: window.innerWidth / 3 };
+        this.state = {
+            json: { width: 600, height: 400, vertices: [], edges: [] }, loading: false,
+            mapSelectModal: false, mapName: undefined, saveAsModal: false, addEdgeModal: false,
+            resizing: false, toolsWidth: window.innerWidth / 3, locationEditor: false,
+            locationEditorX: 0, locationEditorY: 0, priorityEditor: false, priorityEditorValue: ""
+        };
         display.setEdgeSelectCallback(this.selectEdge.bind(this));
         display.setVertexSelectCallback(this.selectVertex.bind(this));
         window.addEventListener("keydown", (event) => {
-
-            if (display.getSelectedVertices().length > 0) {
+            if (!event.ctrlKey && event.keyCode == 69) {
+                this.addEdge();
+            } else if (!event.ctrlKey && event.keyCode == 86) {
+                this.addVertex();
+            } else if (display.getSelectedVertices().length > 0) {
                 this.vertexKeyBinding(event);
             } else if (display.getSelectedEdges().length > 0) {
                 this.edgeKeyBinding(event);
@@ -71,65 +83,109 @@ class MapEditor extends React.Component<{ app: Display }, { json: any, loading: 
 
     vertexKeyBinding(event: KeyboardEvent) {
         var json = this.editorReference.jsonEditor.get();
-        switch (event.key) {
-            case "ArrowDown":
-            case "ArrowLeft":
-            case "ArrowRight":
-            case "ArrowUp":
-                if (display.getSelectedVertices().length != 1)
+        if (!event.ctrlKey && event.keyCode == 76) {
+            if (display.getSelectedVertices().length != 1)
+                return;
+            var id = display.getSelectedVertices()[0];
+            var vertex = this.findVertex(id);
+            if (vertex.index < 0) return;
+            this.setState({ locationEditor: true, locationEditorX: +vertex.value.location.x, locationEditorY: +vertex.value.location.y })
+        } else if (!event.ctrlKey && (event.keyCode == 83 || event.keyCode == 68)) {
+            for (var vid of display.getSelectedVertices()) {
+                var vertex = this.findVertex(vid);
+                var index = vertex.index;
+                var value = vertex.value;
+                if (event.keyCode == 83) {
+                    if (!("source" in value)) value.source = false;
+                    value.source = !value.source;
+                } else if (event.keyCode == 68) {
+                    if (!("dest" in value)) value.dest = false;
+                    value.dest = !value.dest;
+                }
+                json.vertices[index] = value;
+            }
+            this.updateJson(json);
+        } else {
+            switch (event.key) {
+                case "ArrowDown":
+                case "ArrowLeft":
+                case "ArrowRight":
+                case "ArrowUp":
+                    if (display.getSelectedVertices().length != 1)
+                        break;
+                    var id = display.getSelectedVertices()[0];
+                    var vertex = this.findVertex(id);
+                    if (vertex.index < 0) return;
+                    var offsets = { "ArrowDown": [0, 1], "ArrowLeft": [-1, 0], "ArrowRight": [1, 0], "ArrowUp": [0, -1] }[event.key];
+                    vertex.value.location.x += offsets[0];
+                    vertex.value.location.y += offsets[1];
+                    json.vertices[vertex.index] = vertex.value;
+                    this.updateJson(json);
+                    this.selectVertex(id);
                     break;
-                var id = display.getSelectedVertices()[0];
-                var vertex = this.findVertex(id);
-                if (vertex.index < 0) return;
-                var offsets = { "ArrowDown": [0, 1], "ArrowLeft": [-1, 0], "ArrowRight": [1, 0], "ArrowUp": [0, -1] }[event.key];
-                vertex.value.location.x += offsets[0];
-                vertex.value.location.y += offsets[1];
-                json.vertices[vertex.index] = vertex.value;
-                this.updateJson(json);
-                this.selectVertex(id);
-                break;
-            case "Delete":
-                var toRemove = [];
-                for (var i = 0; i < json.edges.length; i++) {
-                    if (display.getSelectedVertices().indexOf(json.edges[i].source) >= 0 || display.getSelectedVertices().indexOf(json.edges[i].dest) >= 0) {
-                        toRemove.push(i);
+                case "Delete":
+                    var toRemove = [];
+                    for (var i = 0; i < json.edges.length; i++) {
+                        if (display.getSelectedVertices().indexOf(json.edges[i].source) >= 0 || display.getSelectedVertices().indexOf(json.edges[i].dest) >= 0) {
+                            toRemove.push(i);
+                        }
                     }
-                }
-                toRemove.sort();
-                for (var i = 0; i < toRemove.length; i++) {
-                    json.edges.splice(toRemove[i] - i, 1);
-                }
-                toRemove = []
-                for (var vid of display.getSelectedVertices()) {
-                    var vertex = this.findVertex(vid);
-                    if (vertex.index < 0) continue;
-                    toRemove.push(vertex.index);
-                }
-                toRemove.sort();
-                for (var i = 0; i < toRemove.length; i++) {
-                    json.vertices.splice(toRemove[i] - i, 1);
-                }
-                this.updateJson(json);
-                break;
+                    toRemove.sort();
+                    for (var i = 0; i < toRemove.length; i++) {
+                        json.edges.splice(toRemove[i] - i, 1);
+                    }
+                    toRemove = []
+                    for (var vid of display.getSelectedVertices()) {
+                        var vertex = this.findVertex(vid);
+                        if (vertex.index < 0) continue;
+                        toRemove.push(vertex.index);
+                    }
+                    toRemove.sort();
+                    for (var i = 0; i < toRemove.length; i++) {
+                        json.vertices.splice(toRemove[i] - i, 1);
+                    }
+                    this.updateJson(json);
+                    break;
+                default:
+                    break;
+            }
         }
     }
 
     edgeKeyBinding(event: KeyboardEvent) {
         var json = this.editorReference.jsonEditor.get();
-        switch (event.key) {
-            case "Delete":
-                var toRemove = [];
-                for (var selected of display.getSelectedEdges()) {
-                    var edge = this.findEdge(selected.sourceId, selected.destId);
-                    if (edge.index < 0) continue;
-                    toRemove.push(edge.index);
-                }
-                toRemove.sort();
-                for (var i = 0; i < toRemove.length; i++) {
-                    json.edges.splice(toRemove[i] - i, 1);
-                }
-                this.updateJson(json);
-                break;
+        if (!event.ctrlKey && event.keyCode == 73) {
+            for (var selected of display.getSelectedEdges()) {
+                var edge = this.findEdge(selected.sourceId, selected.destId);
+                var index = edge.index;
+                var value = edge.value;
+                if (!("invert" in value)) value.invert = false;
+                value.invert = !value.invert;
+                json.edges[index] = value;
+            }
+            this.updateJson(json);
+        } else if (!event.ctrlKey && event.keyCode == 80) {
+            if (display.getSelectedEdges().length != 1)
+                return;
+            var edge = this.findEdge(display.getSelectedEdges()[0].sourceId, display.getSelectedEdges()[0].destId);
+            if (!("priorities" in edge.value)) edge.value.priorities = [];
+            this.setState({ priorityEditor: true, priorityEditorValue: edge.value.priorities.join(",") });
+        } else {
+            switch (event.key) {
+                case "Delete":
+                    var toRemove = [];
+                    for (var selected of display.getSelectedEdges()) {
+                        var edge = this.findEdge(selected.sourceId, selected.destId);
+                        if (edge.index < 0) continue;
+                        toRemove.push(edge.index);
+                    }
+                    toRemove.sort();
+                    for (var i = 0; i < toRemove.length; i++) {
+                        json.edges.splice(toRemove[i] - i, 1);
+                    }
+                    this.updateJson(json);
+                    break;
+            }
         }
     }
 
@@ -247,6 +303,7 @@ class MapEditor extends React.Component<{ app: Display }, { json: any, loading: 
         json.vertices.push(newVertex);
         this.updateJson(json);
         this.selectVertex(id);
+        display.setSelectedVertices([id]);
     }
 
     addEdge() {
@@ -336,6 +393,42 @@ class MapEditor extends React.Component<{ app: Display }, { json: any, loading: 
         }
     }
 
+    closeLocationModal() {
+        this.setState({ locationEditor: false, locationEditorX: 0, locationEditorY: 0 });
+    }
+
+    setLocation() {
+        if (display.getSelectedVertices().length != 1)
+            return;
+        var json = this.state.json;
+        var id = display.getSelectedVertices()[0];
+        var vertex = this.findVertex(id);
+        if (vertex.index < 0) return;
+        vertex.value.location.x = this.state.locationEditorX;
+        vertex.value.location.y = this.state.locationEditorY;
+        json.vertices[vertex.index] = vertex.value;
+        this.updateJson(json);
+        this.closeLocationModal();
+    }
+
+    setPriorities(value: string) {
+        value = value.replace(" ", "");
+        var priorityStrings = value.split(",");
+        var priorities = [];
+        for (var priority of priorityStrings) {
+            priorities.push(+priority);
+        }
+        if (display.getSelectedEdges().length != 1)
+            return;
+        var json = this.state.json;
+        var edge = this.findEdge(display.getSelectedEdges()[0].sourceId, display.getSelectedEdges()[0].destId);
+        if (edge.index < 0) return;
+        edge.value.priorities = priorities;
+        json.edges[edge.index] = edge.value;
+        this.updateJson(json);
+        this.closeLocationModal();
+    }
+
     render() {
         const buttonHeight = 60;
         const resizeWidth = 3;
@@ -370,6 +463,27 @@ class MapEditor extends React.Component<{ app: Display }, { json: any, loading: 
                 <MapSelect show={this.state.mapSelectModal} toggleShow={() => this.setState({ mapSelectModal: !this.state.mapSelectModal })} processMap={this.loadMap.bind(this)}></MapSelect>
                 <GetStringModal title="Save As" show={this.state.saveAsModal} toggleShow={() => this.setState({ saveAsModal: !this.state.saveAsModal })} callback={(name) => this.saveFile(name)} placeholder="Filename..." doneText="Save"></GetStringModal>
                 <LoadingOverlay enabled={this.state.loading}></LoadingOverlay>
+
+                <GetStringModal title="Priority Editor" description="Comma separated list of priorities for an intersection" show={this.state.priorityEditor} toggleShow={() => this.setState({ priorityEditor: !this.state.priorityEditor })}
+                    callback={this.setPriorities.bind(this)} placeholder="Priorities..." doneText="Set Priorities" initialValue={this.state.priorityEditorValue}></GetStringModal>
+
+
+                <Modal show={this.state.locationEditor} onHide={() => this.setState({ locationEditor: false })}>
+                    <Modal.Header closeButton>
+                        <Modal.Title>Set Location</Modal.Title>
+                    </Modal.Header>
+                    <Modal.Body>
+                        Set the location
+                        <label>X Coordinate</label>
+                        <input className="form-control" placeholder="X" value={this.state.locationEditorX} onChange={e => this.setState({ locationEditorX: +e.target.value })}></input>
+                        <label>Y Coordinate</label>
+                        <input className="form-control" placeholder="Y" value={this.state.locationEditorY} onChange={e => this.setState({ locationEditorY: +e.target.value })}></input>
+                    </Modal.Body>
+                    <Modal.Footer>
+                        <Button variant="secondary" onClick={this.closeLocationModal.bind(this)}>Close</Button>
+                        <Button variant="primary" onClick={this.setLocation.bind(this)}>Set Location</Button>
+                    </Modal.Footer>
+                </Modal>
 
                 <Modal show={this.state.addEdgeModal} onHide={this.closeAddEdge.bind(this)}>
                     <Modal.Header closeButton>
