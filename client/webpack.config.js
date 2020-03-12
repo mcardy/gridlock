@@ -3,6 +3,7 @@ const webpack = require("webpack");
 
 var config = {};
 
+config.devtool = "source-map";
 config.mode = "development";
 config.entry = {
     main: path.join(__dirname, "src", "main.tsx")
