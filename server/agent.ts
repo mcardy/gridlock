@@ -212,7 +212,7 @@ export abstract class AbstractAgentBehaviour extends Behaviour<Acceleration, Age
         if (first instanceof EdgePathSegment && second instanceof EdgePathSegment) {
             return (first.getEphemeralEdge() == second.getEphemeralEdge() && firstT <= secondT) || first.getEphemeralEdge().dest == second.getEphemeralEdge().source;
         } else if (first instanceof EdgePathSegment && second instanceof LaneChangePathSegment) {
-            return first.edge == second.entryEdge && firstT < second.exitPoint;
+            return first.edge == second.entryEdge && firstT < second.entryPoint;
         } else if (first instanceof LaneChangePathSegment && second instanceof EdgePathSegment) {
             return (first.exitEdge == second.edge && first.exitPoint <= secondT) || first.exitEdge.dest == second.edge.source;
         }
@@ -226,14 +226,27 @@ export class LaneChangeYeildBehaviour extends AbstractAgentBehaviour {
         if (agent.edge instanceof LaneChangePathSegment && agent.t < 0.10) {
             for (var other of agent.map.agents) {
                 if (other.edge == undefined) continue;
-                // Moving toward the same point and they have the right of way
-                if (other.edge.getEphemeralEdge() == agent.edge.exitEdge && other.t < agent.edge.exitPoint) {
-                    var theirDistance = other.location.distance(agent.edge.getEphemeralEdge().destVertex.location);
-                    var theirSafeDistance = 15 + 10 * other.speed / Simulation.TICK_RATE;
-                    if (theirDistance > theirSafeDistance) continue;
-                    // They have right of way
-                    // Adjust acceleration
-                    return new Acceleration(agent.speed, 0, 1);
+                if (other.edge instanceof EdgePathSegment) {
+                    // Moving toward the same point and they have the right of way
+                    if ((other.edge.getEphemeralEdge() == agent.edge.exitEdge && other.t < agent.edge.exitPoint) ||
+                        (other.edge.getEphemeralEdge().dest == agent.edge.exitEdge.source)) {
+                        var theirDistance = other.location.distance(agent.edge.getEphemeralEdge().destVertex.location);
+                        var theirSafeDistance = 15 + 10 * other.speed / Simulation.TICK_RATE;
+                        if (theirDistance > theirSafeDistance) continue;
+                        // They have right of way
+                        // Adjust acceleration
+                        return new Acceleration(agent.speed, 0, 1);
+                    }
+                } else if (other.edge instanceof LaneChangePathSegment) {
+                    if (other.edge.exitEdge == agent.edge.entryEdge &&
+                        agent.edge.exitPoint > other.edge.entryPoint &&
+                        other.edge.exitPoint > agent.edge.entryPoint) { // Merging into eachothers lanes...
+                        if (agent.edge.entryPoint < other.edge.entryPoint ||
+                            (agent.edge.entryPoint == other.edge.entryPoint && agent.id < other.id) ||
+                            other.t >= 0.10) {
+                            return new Acceleration(agent.speed, 0, 1);
+                        }
+                    }
                 }
             }
         }
@@ -268,16 +281,22 @@ export class LaneChangeBehaviour extends AbstractAgentBehaviour {
     public evaluate(agent: Agent) {
         if (agent.path.length > 0 && agent.path[agent.path.length - 1] instanceof LaneChangePathSegment) {
             var laneChange: LaneChangePathSegment = agent.path[agent.path.length - 1] as LaneChangePathSegment;
-            var nextT = laneChange.exitEdge.curve.next(agent.t, 10 * agent.speed / Simulation.TICK_RATE)
+            var nextT = laneChange.exitEdge.curve.next(agent.t, 20 * agent.speed / Simulation.TICK_RATE)
             var location = laneChange.exitEdge.curve.evaluate(nextT);
             var safeDistance = 20 + 10 * agent.speed / Simulation.TICK_RATE;
             var isSafe = true;
             for (var other of agent.map.agents) {
-                if (other.edge != undefined && other.edge.getEphemeralEdge() == laneChange.exitEdge) {
+                if (other.edge == undefined) continue;
+                if ((other.t < laneChange.exitPoint && other.edge.getEphemeralEdge() == laneChange.exitEdge) ||
+                    other.edge.getEphemeralEdge().dest == laneChange.exitEdge.source) {
                     var distance = other.location.distance(location);
                     if (distance < safeDistance) {
                         isSafe = false;
                     }
+                } else if (other.edge.getEphemeralEdge().source == laneChange.exitEdge.source &&
+                    laneChange.exitEdge.sourceVertex.location.distance(laneChange.getEphemeralEdge().destVertex.location) < 15 &&
+                    other.location.distance(laneChange.exitEdge.sourceVertex.location) < 15) {
+                    isSafe = false;
                 }
             }
             if (isSafe || agent.location.distance(agent.edge.getEphemeralEdge().destVertex.location) < 15) {
