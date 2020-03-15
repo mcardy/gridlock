@@ -294,8 +294,8 @@ export class Map extends Schema {
             visited.push(current);
             if (current.dest) destinations.push(current);
             if (current.id in adjacencyList) {
-                let edge: Edge;
-                for (edge of adjacencyList[current.id]) {
+                for (var entry of adjacencyList[current.id]) {
+                    var edge = entry.edge;
                     next.push(edge.destVertex);
                     if (edge.lane != undefined) {
                         for (var lane of edge.lane.entries) {
@@ -312,57 +312,112 @@ export class Map extends Schema {
      * Returns a path in stack order from source to destination
      * For example, if source is 1 and dest is 3 and they are linked by vertex 2, the
      * resulting array will be [3,2,1], ie. the last item will be the source.
+     * 
+     * Uses an adaptation of dijkstra's algorithm
      * @param source 
      * @param dest 
      */
     public getBestPath(source: Vertex, dest: Vertex): PathSegment[] {
-        type TraceableVertex = { parent: TraceableVertex, edge: PathSegment, node: Vertex };
         var adjacencyList = this.getAdjacencyList();
-        var bestPath: PathSegment[] = null;
-        var visited: Vertex[] = [];
-        var next: TraceableVertex[] = [{ parent: null, edge: null, node: source }];
-        while (next.length != 0) {
-            var current = next.splice(0, 1)[0];
-            if (visited.indexOf(current.node) >= 0) continue;
-            visited.push(current.node);
-            if (current.node == dest) {
-                var path: PathSegment[] = new ArraySchema<PathSegment>();
-                var parent: TraceableVertex = current;
-                while (parent.parent != null) {
-                    path.push(parent.edge);
-                    parent = parent.parent;
-                }
-                if (bestPath == null || path.length < bestPath.length) {
-                    bestPath = path;
-                }
-            }
-            if (current.node != undefined && current.node.id in adjacencyList) {
-                let edge: Edge;
-                for (edge of adjacencyList[current.node.id]) {
-                    var pushed = { parent: current, edge: new EdgePathSegment(edge), node: edge.destVertex };
-                    next.push(pushed);
-                    if (edge.lane != undefined) {
-                        for (let lane of edge.lane.entries) {
-                            if (lane.edge != edge) {
-                                var pushedLaneChange = { parent: pushed, edge: new LaneChangePathSegment(edge, lane.edge), node: undefined };
-                                next.push(pushedLaneChange);
-                                next.push({ parent: pushedLaneChange, edge: new EdgePathSegment(lane.edge), node: lane.edge.destVertex });
-                            }
+
+        // Initialization
+        var queue: Vertex[] = [];
+        var parent: { [id: number]: Vertex } = {};
+        var distance: { [id: number]: number; } = {};
+        for (var vertex of this.vertices) {
+            queue.push(vertex);
+            parent[vertex.id] = undefined;
+            distance[vertex.id] = Infinity;
+        }
+
+        // Start with source
+        distance[source.id] = 0;
+        while (queue.length > 0) {
+            // Find unvisited vertex with minimum weight
+            var vertex: Vertex = undefined;
+            for (var v of queue)
+                if (vertex == undefined || distance[v.id] < distance[vertex.id]) vertex = v;
+
+            if (vertex == dest) break; // If we have reached the destination, terminate dijkstra's algorithm
+
+            queue.splice(queue.indexOf(vertex), 1); // Remove vertex from list
+            if (!(vertex.id in adjacencyList)) continue; // Make sure we are part of adjacency list
+
+            // Find the neighbours. Lane changes count as neighbours
+            var neighbours: { id: number, weight: number }[] = [];
+            for (var entry of adjacencyList[vertex.id]) {
+                neighbours.push({ id: entry.edge.dest, weight: entry.weight });
+                if (entry.edge.lane != undefined) {
+                    for (let lane of entry.edge.lane.entries) {
+                        if (lane.edge != entry.edge) {
+                            // If lane change, set weight as minimum of the two edges
+                            var otherWeight = adjacencyList[lane.edge.source].find(a => a.edge == lane.edge).weight;
+                            neighbours.push({ id: lane.edge.dest, weight: Math.min(entry.weight, otherWeight) });
                         }
                     }
                 }
             }
+
+            // For each neighbour, update distances and parent if needed
+            for (var neighbour of neighbours) {
+                var d = distance[vertex.id] + neighbour.weight;
+                if (d < distance[neighbour.id]) {
+                    distance[neighbour.id] = d;
+                    parent[neighbour.id] = vertex;
+                }
+            }
         }
-        return bestPath;
+
+        // Path in stack order
+        var path: PathSegment[] = [];
+
+        // From the destination to the source, build a path with path segments
+        var current = dest;
+        var p = undefined;
+        while ((p = parent[current.id]) != undefined) {
+            for (var entry of adjacencyList[p.id]) {
+                // Find the edge(s) needed and add them to the path
+                if (entry.edge.dest == current.id) {
+                    path.push(new EdgePathSegment(entry.edge));
+                    break;
+                } else if (entry.edge.lane != undefined) {
+                    for (var lane of entry.edge.lane.entries) {
+                        if (lane.edge.dest == current.id) {
+                            // Add the lane change
+                            path.push(new EdgePathSegment(lane.edge));
+                            path.push(new LaneChangePathSegment(entry.edge, lane.edge));
+                            path.push(new EdgePathSegment(entry.edge));
+                            break;
+                        }
+                    }
+                    break;
+                }
+            }
+            current = p;
+        }
+
+        return path;
     }
 
-    public getAdjacencyList(): Record<number, Edge[]> {
-        const adjacencyList: Record<number, Edge[]> = {};
+    /**
+     * Returns an adjacency list of edges and weights for each edge
+     */
+    public getAdjacencyList(): Record<number, { edge: Edge, weight: number }[]> {
+        const adjacencyList: Record<number, { edge: Edge, weight: number }[]> = {};
         for (const edge of this.edges) {
+            var speed = edge.speed;
+            var numAgents = 0;
+            for (var agent of this.agents) {
+                if (agent.edge.getEphemeralEdge() == edge) {
+                    speed = Math.min(speed, agent.speed);
+                    numAgents++;
+                }
+            }
+            var weight = (edge.length + numAgents) / (speed + 1);
             if (edge.sourceVertex.id in adjacencyList) {
-                adjacencyList[edge.sourceVertex.id].push(edge);
+                adjacencyList[edge.sourceVertex.id].push({ edge: edge, weight: weight });
             } else {
-                adjacencyList[edge.sourceVertex.id] = [edge];
+                adjacencyList[edge.sourceVertex.id] = [{ edge: edge, weight: weight }];
             }
         }
         return adjacencyList;
