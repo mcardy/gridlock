@@ -65,9 +65,13 @@ class MapEditor extends React.Component<{ app: Display }, {
         display.setEdgeSelectCallback(this.selectEdge.bind(this));
         display.setVertexSelectCallback(this.selectVertex.bind(this));
         window.addEventListener("keydown", (event) => {
-            if (!event.ctrlKey && event.keyCode == 69) {
+            if (event.altKey && event.keyCode == 69) {
+                event.preventDefault();
+                event.stopPropagation();
                 this.addEdge();
-            } else if (!event.ctrlKey && event.keyCode == 86) {
+            } else if (event.altKey && event.keyCode == 86) {
+                event.preventDefault();
+                event.stopPropagation();
                 this.addVertex();
             } else if (display.getSelectedVertices().length > 0) {
                 this.vertexKeyBinding(event);
@@ -83,14 +87,18 @@ class MapEditor extends React.Component<{ app: Display }, {
 
     vertexKeyBinding(event: KeyboardEvent) {
         var json = this.editorReference.jsonEditor.get();
-        if (!event.ctrlKey && event.keyCode == 76) {
+        if (event.altKey && event.keyCode == 76) {
+            event.preventDefault();
+            event.stopPropagation();
             if (display.getSelectedVertices().length != 1)
                 return;
             var id = display.getSelectedVertices()[0];
             var vertex = this.findVertex(id);
             if (vertex.index < 0) return;
             this.setState({ locationEditor: true, locationEditorX: +vertex.value.location.x, locationEditorY: +vertex.value.location.y })
-        } else if (!event.ctrlKey && (event.keyCode == 83 || event.keyCode == 68)) {
+        } else if (event.altKey && (event.keyCode == 83 || event.keyCode == 68)) {
+            event.preventDefault();
+            event.stopPropagation();
             for (var vid of display.getSelectedVertices()) {
                 var vertex = this.findVertex(vid);
                 var index = vertex.index;
@@ -154,7 +162,9 @@ class MapEditor extends React.Component<{ app: Display }, {
 
     edgeKeyBinding(event: KeyboardEvent) {
         var json = this.editorReference.jsonEditor.get();
-        if (!event.ctrlKey && event.keyCode == 73) {
+        if (event.altKey && event.keyCode == 73) {
+            event.preventDefault();
+            event.stopPropagation();
             for (var selected of display.getSelectedEdges()) {
                 var edge = this.findEdge(selected.sourceId, selected.destId);
                 var index = edge.index;
@@ -164,7 +174,9 @@ class MapEditor extends React.Component<{ app: Display }, {
                 json.edges[index] = value;
             }
             this.updateJson(json);
-        } else if (!event.ctrlKey && event.keyCode == 80) {
+        } else if (event.altKey && event.keyCode == 80) {
+            event.preventDefault();
+            event.stopPropagation();
             if (display.getSelectedEdges().length != 1)
                 return;
             var edge = this.findEdge(display.getSelectedEdges()[0].sourceId, display.getSelectedEdges()[0].destId);
