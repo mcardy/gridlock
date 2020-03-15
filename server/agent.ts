@@ -409,7 +409,7 @@ export class SpeedLimitBehaviour extends AbstractAgentBehaviour {
         if (agent.path.length > 0 &&
             agent.edge.getEphemeralEdge().speed > agent.path[agent.path.length - 1].getEphemeralEdge().speed &&
             agent.location.distance(agent.edge.getEphemeralEdge().destVertex.location) < agent.edge.getEphemeralEdge().speed - agent.path[agent.path.length - 1].getEphemeralEdge().speed) { // We should slow down
-            return new Acceleration(agent.edge.getEphemeralEdge().speed, agent.path[agent.path.length - 1].getEphemeralEdge().speed, 1 / (agent.edge.getEphemeralEdge().speed - agent.path[agent.path.length - 1].getEphemeralEdge().speed));
+            return new Acceleration(this.speedModifier * agent.edge.getEphemeralEdge().speed, this.speedModifier * agent.path[agent.path.length - 1].getEphemeralEdge().speed, 1 / (agent.edge.getEphemeralEdge().speed - agent.path[agent.path.length - 1].getEphemeralEdge().speed));
         }
         return undefined;
     }
