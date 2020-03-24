@@ -302,7 +302,7 @@ class Display {
         }
         if (this.isSelectedEdge(source.id, dest.id)) {
             var text = ["Source: " + source.id + ", Destination: " + dest.id, "Speed Limit: " + edge.speed];
-            if ("priorities" in edge) {
+            if ("priorities" in edge && edge.priorities != undefined) {
                 if (edge.priorities.length == 1) {
                     text.push("Priority: " + edge.priorities[0]);
                 } else {

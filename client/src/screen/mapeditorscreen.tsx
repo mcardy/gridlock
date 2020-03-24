@@ -119,15 +119,13 @@ class MapEditor extends React.Component<{ app: Display }, {
                 case "ArrowLeft":
                 case "ArrowRight":
                 case "ArrowUp":
-                    if (display.getSelectedVertices().length != 1)
-                        break;
-                    var id = display.getSelectedVertices()[0];
-                    var vertex = this.findVertex(id);
-                    if (vertex.index < 0) return;
                     var offsets = { "ArrowDown": [0, 1], "ArrowLeft": [-1, 0], "ArrowRight": [1, 0], "ArrowUp": [0, -1] }[event.key];
-                    vertex.value.location.x += offsets[0];
-                    vertex.value.location.y += offsets[1];
-                    json.vertices[vertex.index] = vertex.value;
+                    for (var vid of display.getSelectedVertices()) {
+                        var v = this.findVertex(vid);
+                        v.value.location.x += offsets[0];
+                        v.value.location.y += offsets[1];
+                        json.vertices[v.index] = v.value;
+                    }
                     this.updateJson(json);
                     this.selectVertex(id);
                     break;
