@@ -320,7 +320,9 @@ export class GoBehaviour extends AbstractAgentBehaviour {
     }
 
     public evaluate(agent: Agent): Acceleration {
-        return new Acceleration(0, this.speedModifier * agent.edge.getEphemeralEdge().speed, 0.1);
+        var targetSpeed = this.speedModifier * agent.edge.getEphemeralEdge().speed;
+        if (agent.speed == targetSpeed) return undefined;
+        return new Acceleration(0, targetSpeed, 0.1);
     }
 
 }
