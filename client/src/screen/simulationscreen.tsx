@@ -97,12 +97,22 @@ class SimulationMenu extends React.Component<{ room: Colyseus.Room }, {
     saveMetrics() {
         if (this.state.metrics != undefined && this.state.mapName != undefined) {
             var download = document.createElement('a');
-            var metrics = "mapName," + this.state.mapName + "\n";
+            var content = "time";
+            var keys: string[] = [];
             for (var key of Object.keys(this.state.metrics).sort()) {
-                metrics += key + "," + this.state.metrics[key] + "\n";
+                if (key == "agents") continue;
+                keys.push(key);
+                content += "," + key;
             }
-            download.setAttribute("href", "data:text/plain;charset=utf-8," + metrics);
-            download.setAttribute("download", "metrics.csv");
+            for (var i = 0; i <= this.props.room.state.metricsOverTime.length; i++) {
+                content += "\n" + i;
+                var metric = i != this.props.room.state.metricsOverTime.length ? this.props.room.state.metricsOverTime[i] : this.state.metrics;
+                for (var key of keys) {
+                    content += "," + metric[key];
+                }
+            }
+            download.setAttribute("href", "data:text/plain;charset=utf-8," + content);
+            download.setAttribute("download", this.state.mapName + "_metrics.csv");
             download.style.display = "none";
             document.body.appendChild(download);
             download.click();

@@ -18,6 +18,11 @@ class Metrics extends Schema {
     averageTripLength: number = 0;
     @type('number')
     averageSpeed: number = 0;
+
+    public constructor(init?: Partial<Metrics>) {
+        super();
+        Object.assign(this, init);
+    }
 }
 
 class SimulationState extends Schema {
@@ -29,6 +34,8 @@ class SimulationState extends Schema {
     simulationSpeed: number = 0.25;
     @type(Metrics)
     metrics: Metrics;
+    @type([Metrics])
+    metricsOverTime: Metrics[] = new ArraySchema<Metrics>();
     @type('number')
     tickTarget: number;
 }
@@ -39,7 +46,7 @@ export class Simulation extends Room<SimulationState> {
     rawMap: any;
 
     // Constant tick rate of 100 per unit time
-    static readonly TICK_RATE: number = 100;
+    static readonly TICK_RATE: number = 60;
 
 
     onCreate(options) {
@@ -159,6 +166,7 @@ export class Simulation extends Room<SimulationState> {
             this.state.paused = true;
         }
         if (!this.state.paused) {
+            this.state.metricsOverTime.push(new Metrics(this.state.metrics));
             this.state.metrics.totalTicks = this.state.metrics.totalTicks + 1;
             this.state.metrics.throughputPerUnitTime = this.state.metrics.throughput / this.state.metrics.totalTicks;
             if (this.state.metrics.totalTicks % Simulation.TICK_RATE == 0) {
