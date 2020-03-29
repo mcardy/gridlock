@@ -84,8 +84,12 @@ export class Edge extends Schema {
         this.intersectPoints = [];
         this.ctrlX = ctrlX;
         this.ctrlY = ctrlY;
-        this.curve = new BezierCurve(this.sourceVertex.location, this.destVertex.location, this.invert, this.ctrlX != undefined && this.ctrlY != undefined ?
-            new Point2D({ x: this.ctrlX, y: this.ctrlY }) : undefined);
+        if (this.sourceVertex.location.x == this.destVertex.location.x || this.sourceVertex.location.y == this.destVertex.location.y) {
+            this.curve = new StraightLine(this.sourceVertex.location, this.destVertex.location);
+        } else {
+            this.curve = new BezierCurve(this.sourceVertex.location, this.destVertex.location, this.invert, this.ctrlX != undefined && this.ctrlY != undefined ?
+                new Point2D({ x: this.ctrlX, y: this.ctrlY }) : undefined);
+        }
     }
 
     public intersectsWith(edge: Edge): EdgeIntersect {

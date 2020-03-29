@@ -50,13 +50,11 @@ export class StraightLine implements EvaluatablePath {
 
     private start: Point2D;
     private end: Point2D;
-    private slope: number;
     private length: number;
 
     constructor(start: Point2D, end: Point2D) {
         this.start = start;
         this.end = end;
-        this.slope = (end.y - start.y) / (end.x - start.x);
         this.length = start.distance(end);
     }
 

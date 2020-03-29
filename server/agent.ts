@@ -81,6 +81,8 @@ export class Agent extends Schema {
     map: Map
     intersect: EdgeIntersect
 
+    destDistance: number
+
     decider: Decider<Acceleration, Agent>
 
     constructor(source: Vertex, dest: Vertex, map: Map, speedModifier: number) {
@@ -96,6 +98,8 @@ export class Agent extends Schema {
         this.edge = this.path.pop();
         this.t = 0;
         this.speed = this.edge.getEphemeralEdge().speed * speedModifier;
+
+        this.destDistance = this.edge.getEphemeralEdge().length;
 
         this.decider = new Decider<Acceleration, Agent>(
             (a, b) => a.getTotalDistanceTravelled(a.lookup(this.speed)) - b.getTotalDistanceTravelled(b.lookup(this.speed)),
@@ -165,6 +169,12 @@ export class Agent extends Schema {
                 this.t = (this.edge as LaneChangePathSegment).exitPoint;
             }
             this.edge = this.path.pop();
+        }
+
+        if (this.edge != undefined) {
+            this.destDistance = this.location.distance(this.edge.getEphemeralEdge().destVertex.location);
+        } else {
+            this.destDistance = 0;
         }
     }
 
@@ -299,7 +309,7 @@ export class LaneChangeBehaviour extends AbstractAgentBehaviour {
                     isSafe = false;
                 }
             }
-            if (isSafe || agent.location.distance(agent.edge.getEphemeralEdge().destVertex.location) < 15) {
+            if (isSafe || agent.destDistance < 15) {
                 agent.path.pop();
                 laneChange.setPoints(agent.t, nextT);
                 agent.edge = laneChange;
@@ -334,10 +344,11 @@ export class IntersectionEnterBehaviour extends AbstractAgentBehaviour {
     }
 
     public evaluate(agent: Agent): Acceleration {
-        var myDistance = agent.location.distance(agent.edge.getEphemeralEdge().destVertex.location);
-        if (agent.path.length > 0 && myDistance < 10) {
-            var nextEdge = agent.path[agent.path.length - 1].getEphemeralEdge();
-            if (nextEdge.priorities != undefined && nextEdge.priorities.length > 1) {
+        if (agent.path.length == 0) return undefined;
+        var nextEdge = agent.path[agent.path.length - 1].getEphemeralEdge();
+        if (nextEdge.priorities != undefined && nextEdge.priorities.length > 1) {
+            var myDistance = agent.destDistance
+            if (myDistance < 10) {
                 // If there is someone stopped in the intersection, we should not enter.
                 for (var other of agent.map.agents) {
                     if (other != undefined && other.edge != undefined && other.edge.getEphemeralEdge() == nextEdge && other.speed == 0) {
@@ -389,7 +400,7 @@ export class StopBehaviour extends AbstractAgentBehaviour {
     }
 
     public evaluate(agent: Agent): Acceleration {
-        if (agent.path.length > 0 && agent.path[agent.path.length - 1].getEphemeralEdge().currentPriority == 0 && agent.location.distance(agent.edge.getEphemeralEdge().destVertex.location) <= 10 * agent.speed / Simulation.TICK_RATE + 0.5) {
+        if (agent.path.length > 0 && agent.path[agent.path.length - 1].getEphemeralEdge().currentPriority == 0 && agent.destDistance <= 10 * agent.speed / Simulation.TICK_RATE + 0.5) {
             return new Acceleration(this.speedModifier * agent.edge.getEphemeralEdge().speed, 0, 0.05);
         } else if (agent.edge.getEphemeralEdge().currentPriority == 0 && agent.location.distance(agent.edge.getEphemeralEdge().sourceVertex.location) <= 1) {
             return new Acceleration(agent.speed, 0, 1);
@@ -410,7 +421,7 @@ export class SpeedLimitBehaviour extends AbstractAgentBehaviour {
     public evaluate(agent: Agent): Acceleration {
         if (agent.path.length > 0 &&
             agent.edge.getEphemeralEdge().speed > agent.path[agent.path.length - 1].getEphemeralEdge().speed &&
-            agent.location.distance(agent.edge.getEphemeralEdge().destVertex.location) < agent.edge.getEphemeralEdge().speed - agent.path[agent.path.length - 1].getEphemeralEdge().speed) { // We should slow down
+            agent.destDistance < agent.edge.getEphemeralEdge().speed - agent.path[agent.path.length - 1].getEphemeralEdge().speed) { // We should slow down
             return new Acceleration(this.speedModifier * agent.edge.getEphemeralEdge().speed, this.speedModifier * agent.path[agent.path.length - 1].getEphemeralEdge().speed, 1 / (agent.edge.getEphemeralEdge().speed - agent.path[agent.path.length - 1].getEphemeralEdge().speed));
         }
         return undefined;
@@ -459,23 +470,24 @@ export class IntersectionBehaviour extends AbstractAgentBehaviour {
         var yIncreasing = agent.edge.getEphemeralEdge().sourceVertex.location.y <= agent.edge.getEphemeralEdge().destVertex.location.y;
 
         var intersection: EdgeIntersect;
-        for (var other of agent.map.agents) {
-            if (other.edge == undefined) continue;
-            if ((intersection = this.getIntersection(agent, other)) != undefined && intersection.sourceEdge.currentPriority < intersection.edge.currentPriority) { // Moving toward an intersection
-                var myDistance = agent.location.distance(intersection.point);
-                var mySafeDistance = 30;
-                var theirDistance = other.location.distance(intersection.point);
-                var theirSafeDistance = 18 + myDistance;
-                if (other.speed == 0 && theirDistance > 10) continue;
-                if (myDistance > mySafeDistance || theirDistance > theirSafeDistance) continue;
-                if (myDistance <= 15) continue; // We are committed to the turn
-                // First, are we moving toward the intersection
+        for (var intersection of agent.edge.getEphemeralEdge().intersectPoints) {
+            if (intersection.sourceEdge.currentPriority >= intersection.edge.currentPriority) continue;
+            var myDistance = agent.location.distance(intersection.point);
+            var mySafeDistance = 30;
+            if (myDistance <= 15 || myDistance > mySafeDistance) return undefined; // We are committed to the turn
+            for (var other of agent.map.agents) {
+                if (other.edge == undefined || other.edge.getEphemeralEdge() != intersection.edge) continue;
                 if (xIncreasing == agent.location.x <= intersection.point.x && yIncreasing == agent.location.y <= intersection.point.y
                     // And are they moving toward the intersection?
                     && (other.edge.getEphemeralEdge().sourceVertex.location.x == other.edge.getEphemeralEdge().destVertex.location.x ||
                         other.edge.getEphemeralEdge().sourceVertex.location.x < other.edge.getEphemeralEdge().destVertex.location.x == other.location.x <= intersection.point.x)
                     && (other.edge.getEphemeralEdge().sourceVertex.location.y == other.edge.getEphemeralEdge().destVertex.location.y ||
                         other.edge.getEphemeralEdge().sourceVertex.location.y < other.edge.getEphemeralEdge().destVertex.location.y == other.location.y <= intersection.point.y)) {
+                    // Do expensive calculations last
+                    var theirDistance = other.location.distance(intersection.point);
+                    var theirSafeDistance = 18 + myDistance;
+                    if ((other.speed == 0 && theirDistance > 10) || theirDistance > theirSafeDistance) continue;
+
                     // Adjust acceleration to slow down 10 units away
                     var denom = myDistance - 15;
                     denom *= 2
@@ -496,7 +508,7 @@ export class YeildBehaviour extends AbstractAgentBehaviour {
 
     public evaluate(agent: Agent): Acceleration {
         var safeDistance = 20 + 10 * agent.speed / Simulation.TICK_RATE;
-        var myDistance = agent.location.distance(agent.edge.getEphemeralEdge().destVertex.location);
+        var myDistance = agent.destDistance
         if (myDistance > safeDistance)
             return undefined;
         if (myDistance <= 15)
@@ -506,15 +518,16 @@ export class YeildBehaviour extends AbstractAgentBehaviour {
             if (other.edge == undefined) continue;
             // Moving toward the same point and they have the right of way
             if (this.doSegmentsConjoin(agent.edge, other.edge)) {
-                var theirDistance = other.location.distance(agent.edge.getEphemeralEdge().destVertex.location);
-                var theirSafeDistance = 20 + 10 * other.speed / Simulation.TICK_RATE;
-                if (theirDistance > theirSafeDistance) continue;
                 // They have right of way
                 if ((agent.edge.getEphemeralEdge().currentPriority != 0 && agent.edge.getEphemeralEdge().currentPriority < other.edge.getEphemeralEdge().currentPriority) ||
                     (agent.edge.getEphemeralEdge().currentPriority != 0 && other.edge.getEphemeralEdge().currentPriority == 0) ||
                     // The light just turned red
                     (agent.edge.getEphemeralEdge().currentPriority == 0 && other.edge.getEphemeralEdge().currentPriority == 0 &&
                         agent.edge.getEphemeralEdge().lastPriority < other.edge.getEphemeralEdge().lastPriority)) {
+                    // Do expensive calculations last
+                    var theirDistance = other.destDistance;
+                    var theirSafeDistance = 20 + 10 * other.speed / Simulation.TICK_RATE;
+                    if (theirDistance > theirSafeDistance) continue;
                     // Adjust acceleration
                     var denom = myDistance - 15;
                     if (denom <= 1) denom = 1;
@@ -535,7 +548,7 @@ export class YeildCutOffBehaviour extends AbstractAgentBehaviour {
 
     public evaluate(agent: Agent): Acceleration {
         var safeDistance = 20 + 10 * agent.speed / Simulation.TICK_RATE;
-        var myDistance = agent.location.distance(agent.edge.getEphemeralEdge().destVertex.location);
+        var myDistance = agent.destDistance;
         if (myDistance > safeDistance)
             return undefined;
 
@@ -543,7 +556,7 @@ export class YeildCutOffBehaviour extends AbstractAgentBehaviour {
             if (other.edge == undefined) continue;
             // Moving toward the same point and they have the right of way
             if (this.doSegmentsConjoin(agent.edge, other.edge)) {
-                var theirDistance = other.location.distance(agent.edge.getEphemeralEdge().destVertex.location);
+                var theirDistance = other.destDistance;
                 // They have committed to the turn
                 if (theirDistance < 15 && theirDistance < myDistance) {
                     // Adjust acceleration
@@ -566,12 +579,13 @@ export class FollowingBehaviour extends AbstractAgentBehaviour {
 
     public evaluate(agent: Agent): Acceleration {
         var minDistance = Infinity;
-        var distanceFromDest = agent.location.distance(agent.edge.getEphemeralEdge().destVertex.location);
+        var distanceFromDest = agent.destDistance;
         var safeDistance = 10 * agent.speed / Simulation.TICK_RATE + 10; // Start slowing down when within 10 + 10 * speed/unit units of another agent
 
         for (var other of agent.map.agents) {
             if (other.edge == undefined) continue;
             if (this.doSegmentsConnect(agent.edge, other.edge, agent.t, other.t)) { // Moving toward another agent
+                if (agent.edge.getEphemeralEdge() == other.edge.getEphemeralEdge() && agent.destDistance < other.destDistance) continue;
                 if (agent.location.x == other.location.x && agent.location.y == other.location.y) // WE are in the same place, don't consider as part of this behaviour.
                     continue;
                 var distance = agent.location.distance(other.location);
