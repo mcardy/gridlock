@@ -311,7 +311,7 @@ export class LaneChangeBehaviour extends AbstractAgentBehaviour {
             }
             if (isSafe || agent.destDistance < 15) {
                 agent.path.pop();
-                laneChange.setPoints(agent.t, nextT);
+                laneChange.setPoints(agent.t, nextT < 1 ? nextT : 1);
                 agent.edge = laneChange;
                 agent.t = 0;
             }
@@ -561,7 +561,7 @@ export class YeildBehaviour extends AbstractAgentBehaviour {
                         agent.edge.getEphemeralEdge().lastPriority < other.edge.getEphemeralEdge().lastPriority)) {
                     // Do expensive calculations last
                     var theirDistance = other.destDistance;
-                    var theirSafeDistance = 20 + 10 * other.speed / Simulation.TICK_RATE;
+                    var theirSafeDistance = 5 + myDistance + 12 * other.speed / Simulation.TICK_RATE;
                     if (theirDistance > theirSafeDistance) continue;
                     // Adjust acceleration
                     var denom = myDistance - 15;
