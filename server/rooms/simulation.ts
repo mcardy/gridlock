@@ -106,7 +106,8 @@ export class Simulation extends Room<SimulationState> {
                 priorities,
                 edgeObject["ctrlX"],
                 edgeObject["ctrlY"],
-                edgeObject["speed"]
+                edgeObject["speed"],
+                edgeObject["stopOnRed"]
             );
             this.state.map.edges.push(edge);
         }

@@ -38,7 +38,7 @@ export class Edge extends Schema {
     readonly dest: number;
 
     @type('boolean')
-    readonly invert: boolean = false
+    readonly invert: boolean = false;
     @type(['number'])
     readonly priorities: number[]
     @type('number')
@@ -48,6 +48,8 @@ export class Edge extends Schema {
 
     @type('number')
     readonly speed: number = 60;
+    @type('boolean')
+    readonly stopOnRed: boolean = true;
 
     readonly sourceVertex: Vertex
     readonly destVertex: Vertex
@@ -67,7 +69,7 @@ export class Edge extends Schema {
 
     lane: Lane
 
-    public constructor(source: Vertex, dest: Vertex, invert: boolean, priorities?: number[], ctrlX?: number, ctrlY?: number, speed?: number) {
+    public constructor(source: Vertex, dest: Vertex, invert: boolean, priorities?: number[], ctrlX?: number, ctrlY?: number, speed?: number, stopOnRed?: boolean) {
         super();
         this.source = source.id;
         this.dest = dest.id;
@@ -76,6 +78,9 @@ export class Edge extends Schema {
         this.invert = invert;
         if (speed != undefined)
             this.speed = speed;
+        if (stopOnRed != undefined) {
+            this.stopOnRed = stopOnRed;
+        }
         this.length = this.calculateLength();
         if (priorities !== undefined && priorities.length > 0) {
             this.priorities = priorities;

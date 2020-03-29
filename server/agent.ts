@@ -333,7 +333,7 @@ export class RedLightRightTurnBehaviour extends AbstractAgentBehaviour {
     public evaluate(agent: Agent) {
         if (agent.path.length > 0 && agent.destDistance < 10 * agent.speed / Simulation.TICK_RATE) {
             var edge = agent.path[agent.path.length - 1].getEphemeralEdge();
-            if (edge.currentPriority > 0 && edge.currentPriority < 1) {
+            if (edge.stopOnRed && edge.currentPriority > 0 && edge.currentPriority < 1) {
                 var source = agent.path[agent.path.length - 1].getEphemeralEdge().sourceVertex;
                 var count = 0;
                 var prioritySum = 0;

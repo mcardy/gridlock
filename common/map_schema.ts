@@ -165,6 +165,15 @@ const map_schema = {
                             true
                         ]
                     },
+                    "stopOnRed": {
+                        "$id": "#/properties/edges/items/properties/stopOnRed",
+                        "type": "boolean",
+                        "title": "Should agents stop on red when making right turns? Defaulted to true.",
+                        "default": true,
+                        "examples": [
+                            true
+                        ]
+                    },
                     "ctrlX": {
                         "$id": "#/properties/edges/items/properties/ctrlX",
                         "type": "integer",
