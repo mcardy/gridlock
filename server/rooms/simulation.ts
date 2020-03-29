@@ -60,6 +60,7 @@ export class Simulation extends Room<SimulationState> {
         this.state.paused = true;
         Agent.nextID = 0;
         this.random = new Random(MersenneTwister19937.seed(this.rawMap.seed))
+        this.state.metricsOverTime = new ArraySchema<Metrics>();
         this.state.metrics = new Metrics();
         this.spawnRate = "spawn_rate" in this.rawMap ? this.rawMap.spawn_rate : 5;
         this.state.map.agents = new ArraySchema<Agent>();
