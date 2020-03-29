@@ -113,6 +113,7 @@ export class Agent extends Schema {
                 new YeildBehaviour(2),
                 new YeildCutOffBehaviour(2),
                 new FollowingBehaviour(3),
+                new RedLightRightTurnBehaviour(4, speedModifier),
                 new SpeedLimitBehaviour(5, speedModifier),
                 new StopBehaviour(9, speedModifier),
                 new GoBehaviour(10, speedModifier)
@@ -251,8 +252,7 @@ export class LaneChangeYeildBehaviour extends AbstractAgentBehaviour {
                     if (other.edge.exitEdge == agent.edge.entryEdge &&
                         agent.edge.exitPoint > other.edge.entryPoint &&
                         other.edge.exitPoint > agent.edge.entryPoint) { // Merging into eachothers lanes...
-                        if (agent.edge.entryPoint < other.edge.entryPoint ||
-                            (agent.edge.entryPoint == other.edge.entryPoint && agent.id < other.id) ||
+                        if ((agent.edge.entryPoint <= other.edge.entryPoint && agent.id < other.id) ||
                             other.t >= 0.10) {
                             return new Acceleration(agent.speed, 0, 1);
                         }
@@ -316,6 +316,41 @@ export class LaneChangeBehaviour extends AbstractAgentBehaviour {
                 agent.t = 0;
             }
         }
+        return undefined;
+    }
+}
+
+export class RedLightRightTurnBehaviour extends AbstractAgentBehaviour {
+
+    private speedModifier: number
+    private ticksStopped: number
+
+    constructor(priority: number, speedModifier: number) {
+        super(priority);
+        this.speedModifier = speedModifier;
+    }
+
+    public evaluate(agent: Agent) {
+        if (agent.path.length > 0 && agent.destDistance < 10 * agent.speed / Simulation.TICK_RATE) {
+            var edge = agent.path[agent.path.length - 1].getEphemeralEdge();
+            if (edge.currentPriority > 0 && edge.currentPriority < 1) {
+                var source = agent.path[agent.path.length - 1].getEphemeralEdge().sourceVertex;
+                var count = 0;
+                var prioritySum = 0;
+                for (var e of agent.map.edges) {
+                    if (e.sourceVertex == source && e != edge) {
+                        count++;
+                        prioritySum += e.currentPriority;
+                    }
+                }
+                if (count != 0 && prioritySum == 0) {
+                    if (this.ticksStopped >= 2) return undefined;
+                    if (agent.speed <= 0.01) this.ticksStopped++;
+                    return new Acceleration(this.speedModifier * agent.edge.getEphemeralEdge().speed, 0, agent.destDistance > 1 ? 0.05 : 1);
+                }
+            }
+        }
+        this.ticksStopped = 0;
         return undefined;
     }
 }
