@@ -121,8 +121,42 @@ def generate_intersection(v_start, x_offset, y_offset, intersection_type):
             t = 8+(i+1)%8
             edges.append({"source": v_start+t, "dest": v_start+i, "speed": roundabout_speed, "ctrlX": x_offset+40, "ctrlY": y_offset+40})
         return vertexIds
-    elif (intersection_type == IntersectionType.ROUDNABOUT and multi_lane):
-        raise NotImplementedError("Multi lane rounabout has not yet been implemented")
+    elif (intersection_type == IntersectionType.ROUNDABOUT and multi_lane):
+        intersection_width = 80
+        intersection_height = 80
+        x_offset += (INTERSECTION_WIDTH - intersection_width)/2
+        y_offset += (INTERSECTION_HEIGHT - intersection_height)/2
+        roundabout_speed = 30
+        # Define the roundabouts vertex positions, starting with the outer entry/exit points
+        x_offsets = [27, 35, 45, 53, 80, 80, 80, 80, 53, 45, 35, 27, 0, 0, 0, 0, 30, 50, 60, 60, 50, 30, 20, 20]
+        y_offsets = [0, 0, 0, 0, 27, 35, 45, 53, 80, 80, 80, 80, 53, 45, 35, 27, 20, 20, 30, 50, 60, 60, 50, 30]
+
+        vertexIds = []
+        for i in range(0,24):
+            if (i < 16): vertexIds.append(v_start+i)
+            vertices.append({"id": v_start+i, "location": {"x": x_offset + x_offsets[i], "y": y_offset + y_offsets[i]}})
+        for i in range(0,8):
+            s = 2*i+ (1 if i%2 == 0 else 0)
+            t = i+16
+            if (i%2 == 0):
+                priority = 0.5
+                source = s
+                dest = t
+            else:
+                priority = 1
+                source = t
+                dest = s
+            ctrlPoint = 80
+            edges.append({"source": v_start+source, "dest": v_start+dest, "speed": roundabout_speed, "ctrlX": x_offset + (ctrlPoint if (i+3) % 8 >= 4 else 0), "ctrlY": y_offset + (ctrlPoint if (i+1) % 8 >= 4 else 0), "priorities": [priority]})
+        for i in range(16, 24):
+            t = 16+(i+1)%8
+            edges.append({"source": v_start+t, "dest": v_start+i, "speed": roundabout_speed, "ctrlX": x_offset+40, "ctrlY": y_offset+40})
+        for i in range(0,4):
+            s = 4 * i
+            t = (s + 15) % 16
+            ctrlPoint = 80
+            edges.append({"source": v_start+s, "dest": v_start+t, "speed": roundabout_speed, "ctrlX": x_offset + (ctrlPoint if (i+3) % 4 < 2 else 0), "ctrlY": y_offset + (ctrlPoint if (i+2) % 4 < 2 else 0), "priorities": [priority]})
+        return vertexIds
 
 # Main code begins
 options = parse_options()
