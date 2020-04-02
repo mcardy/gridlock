@@ -11,6 +11,8 @@ export class Vertex extends Schema {
     readonly source: boolean
     @type('boolean')
     readonly dest: boolean
+    @type('number')
+    readonly weight: number
 
     public constructor(init?: Partial<Vertex>) {
         super();
@@ -281,8 +283,8 @@ export class Map extends Schema {
     @type([Lane])
     lanes: Lane[] = new ArraySchema<Lane>();
 
-    sources: number[] = new ArraySchema<number>();
-    destinations: number[] = new ArraySchema<number>();
+    sources: Vertex[] = [];
+    destinations: Vertex[] = [];
 
     public findVertexById(id: number): Vertex {
         return this.vertices.find(function (vertex) { return vertex.id == id });

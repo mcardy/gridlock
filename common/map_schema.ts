@@ -112,6 +112,15 @@ const map_schema = {
                         "examples": [
                             true
                         ]
+                    },
+                    "weight": {
+                        "$id": "#/properties/vertices/items/properties/weight",
+                        "type": "integer",
+                        "title": "A weighting as to how often the vertex should be chosen as a source/destination. Only applicable if source or dest are true.",
+                        "default": 1,
+                        "examples": [
+                            2
+                        ]
                     }
                 }
             }

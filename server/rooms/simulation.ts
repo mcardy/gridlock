@@ -76,20 +76,22 @@ export class Simulation extends Room<SimulationState> {
         this.state.map.width = mapObject.width;
         this.state.map.height = mapObject.height;
         for (let vertexObject of mapObject["vertices"]) {
-            if (vertexObject["source"] == true) {
-                this.state.map.sources.push(vertexObject["id"]);
-            } else if (vertexObject["dest"] == true) {
-                this.state.map.destinations.push(vertexObject["id"]);
-            }
-            this.state.map.vertices.push(new Vertex({
+            var vertex: Vertex = new Vertex({
                 dest: vertexObject["dest"] == true,
                 source: vertexObject["source"] == true,
+                weight: "weight" in vertexObject ? vertexObject["weight"] : 1,
                 location: new Point2D({
                     x: +vertexObject["location"]["x"],
                     y: +vertexObject["location"]["y"]
                 }),
                 id: +vertexObject["id"]
-            }));
+            });
+            this.state.map.vertices.push(vertex);
+            if (vertex.source) {
+                this.state.map.sources.push(vertex);
+            } else if (vertex.dest) {
+                this.state.map.destinations.push(vertex);
+            }
         }
         for (let edgeObject of mapObject["edges"]) {
             var priorities = undefined;
@@ -186,16 +188,15 @@ export class Simulation extends Room<SimulationState> {
                 }
             }
             if (this.spawnRate != 0 && this.state.metrics.totalTicks % Math.round(Simulation.TICK_RATE / this.spawnRate) == 0) {
-                var sourceId = this.state.map.sources[this.random.integer(0, this.state.map.sources.length - 1)];
-                var source = this.state.map.findVertexById(sourceId);
+                var source = this.randomVertex(this.state.map.sources);
+
                 var destinations = [];
                 for (var d of this.state.map.getAssignableDestinations(source)) {
                     if (d.location.distance(source.location) > 20) {
                         destinations.push(d);
                     }
                 }
-
-                var dest = destinations[this.random.integer(0, destinations.length - 1)];
+                var dest = this.randomVertex(destinations);
 
                 var agent = new Agent(source, dest, this.state.map, this.random.real(0.9, 1.1));
                 this.state.metrics.spawned = this.state.metrics.spawned + 1;
@@ -217,6 +218,20 @@ export class Simulation extends Room<SimulationState> {
                 this.state.map.agents.splice(this.state.map.agents.indexOf(agent), 1);
             }
         }
+    }
+
+    randomVertex(vertices: Vertex[]) {
+        var totalWeight = 0;
+        for (var v of vertices) {
+            totalWeight += v.weight;
+        }
+        var rand = this.random.integer(0, totalWeight - 1);
+        for (var v of vertices) {
+            rand -= v.weight;
+            if (rand < 0)
+                return v;
+        }
+        return undefined;
     }
 
     onJoin(client) {
