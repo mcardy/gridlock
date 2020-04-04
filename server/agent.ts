@@ -110,8 +110,8 @@ export class Agent extends Schema {
                 new CutOffBehaviour(1),
                 new IntersectionBehaviour(1),
                 new IntersectionEnterBehaviour(1),
-                new YeildBehaviour(2),
-                new YeildCutOffBehaviour(2),
+                new YieldBehaviour(2),
+                new YieldCutOffBehaviour(2),
                 new FollowingBehaviour(3),
                 new RedLightRightTurnBehaviour(4, speedModifier),
                 new SpeedLimitBehaviour(5, speedModifier),
@@ -198,7 +198,7 @@ export abstract class AbstractAgentBehaviour extends Behaviour<Acceleration, Age
     }
 
     /**
-     * For yeild behaviour
+     * For yield behaviour
      * @param first 
      * @param second 
      */
@@ -206,11 +206,6 @@ export abstract class AbstractAgentBehaviour extends Behaviour<Acceleration, Age
         if (first instanceof EdgePathSegment && second instanceof EdgePathSegment) {
             return first.getEphemeralEdge().destVertex == second.getEphemeralEdge().destVertex && first.getEphemeralEdge() != second.getEphemeralEdge();
         }
-        // else if (first instanceof LaneChangePathSegment && second instanceof EdgePathSegment) {
-        //    return first.exitEdge == second.edge;
-        //} else if (second instanceof LaneChangePathSegment && first instanceof EdgePathSegment) {
-        //    return second.exitEdge == first.edge;
-        //}
         return false;
     }
 
@@ -242,7 +237,7 @@ export class LaneChangeYeildBehaviour extends AbstractAgentBehaviour {
                     if ((other.edge.getEphemeralEdge() == agent.edge.exitEdge && other.t < agent.edge.exitPoint) ||
                         (other.edge.getEphemeralEdge().dest == agent.edge.exitEdge.source)) {
                         var theirDistance = other.location.distance(agent.edge.getEphemeralEdge().destVertex.location);
-                        var theirSafeDistance = 15 + 10 * other.speed / Simulation.TICK_RATE;
+                        var theirSafeDistance = 10 + 10 * other.speed / Simulation.TICK_RATE;
                         if (theirDistance > theirSafeDistance) continue;
                         // They have right of way
                         // Adjust acceleration
@@ -252,8 +247,7 @@ export class LaneChangeYeildBehaviour extends AbstractAgentBehaviour {
                     if (other.edge.exitEdge == agent.edge.entryEdge &&
                         agent.edge.exitPoint > other.edge.entryPoint &&
                         other.edge.exitPoint > agent.edge.entryPoint) { // Merging into eachothers lanes...
-                        if ((agent.edge.entryPoint <= other.edge.entryPoint && agent.id < other.id) ||
-                            other.t >= 0.10) {
+                        if ((agent.edge.entryPoint <= other.edge.entryPoint && agent.id < other.id) || other.t >= 0.10) {
                             return new Acceleration(agent.speed, 0, 1);
                         }
                     }
@@ -539,7 +533,7 @@ export class IntersectionBehaviour extends AbstractAgentBehaviour {
     }
 }
 
-export class YeildBehaviour extends AbstractAgentBehaviour {
+export class YieldBehaviour extends AbstractAgentBehaviour {
 
     public evaluate(agent: Agent): Acceleration {
         var safeDistance = 20 + 10 * agent.speed / Simulation.TICK_RATE;
@@ -579,7 +573,7 @@ export class YeildBehaviour extends AbstractAgentBehaviour {
 
 }
 
-export class YeildCutOffBehaviour extends AbstractAgentBehaviour {
+export class YieldCutOffBehaviour extends AbstractAgentBehaviour {
 
     public evaluate(agent: Agent): Acceleration {
         var safeDistance = 20 + 10 * agent.speed / Simulation.TICK_RATE;
