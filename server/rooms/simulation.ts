@@ -45,7 +45,7 @@ export class Simulation extends Room<SimulationState> {
     spawnRate: number;
     rawMap: any;
 
-    // Constant tick rate of 100 per unit time
+    // Constant tick rate of 60 per unit time
     static readonly TICK_RATE: number = 60;
 
 

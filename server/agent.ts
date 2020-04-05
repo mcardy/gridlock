@@ -105,13 +105,13 @@ export class Agent extends Schema {
             (a, b) => a.getTotalDistanceTravelled(a.lookup(this.speed)) - b.getTotalDistanceTravelled(b.lookup(this.speed)),
             [
                 new LaneChangeBehaviour(0),
-                new LaneChangeGiveSpaceBehaviour(1),
-                new LaneChangeYeildBehaviour(1),
                 new CutOffBehaviour(1),
                 new IntersectionBehaviour(1),
                 new IntersectionEnterBehaviour(1),
                 new YieldBehaviour(2),
                 new YieldCutOffBehaviour(2),
+                new LaneChangeYieldBehaviour(2),
+                new LaneChangeGiveSpaceBehaviour(3),
                 new FollowingBehaviour(3),
                 new RedLightRightTurnBehaviour(4, speedModifier),
                 new SpeedLimitBehaviour(5, speedModifier),
@@ -227,7 +227,7 @@ export abstract class AbstractAgentBehaviour extends Behaviour<Acceleration, Age
 
 }
 
-export class LaneChangeYeildBehaviour extends AbstractAgentBehaviour {
+export class LaneChangeYieldBehaviour extends AbstractAgentBehaviour {
     public evaluate(agent: Agent) {
         if (agent.edge instanceof LaneChangePathSegment && agent.t < 0.10) {
             for (var other of agent.map.agents) {

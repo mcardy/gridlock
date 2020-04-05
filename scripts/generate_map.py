@@ -59,8 +59,8 @@ def generate_intersection(v_start, x_offset, y_offset, intersection_type):
         for i in range(0,8,2):
             for j in range(1,8,2):
                 if (j == i+1): continue
-                green_priority = 0.5 if j == i + 3 else 1
-                red_priority = 0.25 if i == j + 1 % 8 else 0
+                green_priority = 0.5 if j == (i + 3) % 8 else 1
+                red_priority = 0.25 if i == (j + 1) % 8 else 0
                 priorities = [red_priority if i % 4 == 0 else green_priority, 0, green_priority if i % 4 == 0 else red_priority, 0]
                 edges.append({"source": v_start+i, "dest": v_start+j, "invert": i % 4 == 0, "priorities": priorities})
         intersections.append({"vertexIds": vertexIds, "timings": timings})
