@@ -1,3 +1,6 @@
+/**
+ * The schema for the map objects
+ */
 const map_schema = {
     "definitions": {},
     "$schema": "http://json-schema.org/draft-07/schema#",

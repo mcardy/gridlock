@@ -1,3 +1,7 @@
+/**
+ * Contains the classes needed to represent a map in a simulation
+ */
+
 import { Schema, ArraySchema, type } from '@colyseus/schema';
 import { Point2D, BezierCurve, EvaluatablePath, StraightLine } from '../common/math';
 import { Agent } from './agent'

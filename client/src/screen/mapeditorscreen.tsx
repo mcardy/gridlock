@@ -46,6 +46,9 @@ class MapEditorButton extends React.Component<MapEditorButtonProperties, {}> {
     }
 }
 
+/**
+ * Main map editor controls react component
+ */
 class MapEditor extends React.Component<{ app: Display }, {
     json: any, loading: boolean, mapSelectModal: boolean, mapName: string,
     saveAsModal: boolean, addEdgeModal: boolean, sourceVertex?: number, destVertex?: number, resizing: boolean, resizingStartingX?: number,
@@ -523,6 +526,9 @@ class MapEditor extends React.Component<{ app: Display }, {
     }
 }
 
+/**
+ * Setup and run the map editor. Consists of adding the map editor to the screen
+ */
 export default function runMapEditor() {
     ReactDOM.render(
         <MapEditor app={display}></MapEditor>,

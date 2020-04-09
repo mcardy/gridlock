@@ -3,7 +3,9 @@ import * as React from 'react';
 import Modal from 'react-bootstrap/Modal';
 import Button from 'react-bootstrap/Button';
 
-
+/**
+ * A modal that consists of a string popup
+ */
 export default class GetStringModal extends React.Component<{ title: string, show: boolean, toggleShow: () => void, callback: (name: string) => void, placeholder?: string, description?: string, doneText?: string, initialValue?: string }, { value: string }> {
 
     constructor(props) {

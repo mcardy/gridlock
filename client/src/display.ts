@@ -2,6 +2,10 @@ import * as PIXI from 'pixi.js'
 import { Point2D, BezierCurve } from '../../common/math'
 import Colours from './util/style';
 
+/**
+ * The display class is responsible for abstracting away rendering of a map object 
+ * and providing callback hook points for various events.
+ */
 class Display {
     PixiApp: PIXI.Application;
 
@@ -26,6 +30,7 @@ class Display {
     private scaler: number;
 
     constructor() {
+        // Initialize a PIXI application
         this.PixiApp = new PIXI.Application({
             width: 800,
             height: 600,
@@ -43,6 +48,7 @@ class Display {
         this.PixiApp.renderer.resize(window.innerWidth, window.innerHeight);
         document.body.appendChild(this.PixiApp.view);
 
+        // Each edge, vertex and agent is rendered in a container
         this.edgeContainer = new PIXI.Container();
         this.vertexContainer = new PIXI.Container();
         this.agentContainer = new PIXI.Container();
@@ -57,6 +63,10 @@ class Display {
         this.PixiApp.stage.addChild(overlay);
     }
 
+    /**
+     * Draw a map into the pixi application canvas contained in this display
+     * @param map The map to draw
+     */
     public drawMap(map): void {
         this.map = map;
         this.scaler = Math.min(this.PixiApp.screen.width / map.width, this.PixiApp.screen.height / map.height);
@@ -135,6 +145,9 @@ class Display {
         this.redrawMap();
     }
 
+    /**
+     * Redraws the current map in the event of any changes
+     */
     public redrawMap() {
         if (this.map != undefined) {
             this.drawMap(this.map);
@@ -259,6 +272,10 @@ class Display {
         return curve;
     }
 
+    /**
+     * Draw an edge using a straight line or bezier curve as defined by common bezier math
+     * @param edge The edge to draw
+     */
     private drawCurve(edge): PIXI.DisplayObject {
         var priority = "currentPriority" in edge ? edge.currentPriority : 1;
         var color = priority == 0 ? 0xFF0000 : (edge.priorities != undefined && edge.priorities.length > 1 ? 0x00FF00 : 0xFFFFFF)

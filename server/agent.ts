@@ -184,6 +184,9 @@ export class Agent extends Schema {
     }
 }
 
+/**
+ * Common utility functions used between multiple behaviours
+ */
 export abstract class AbstractAgentBehaviour extends Behaviour<Acceleration, Agent> {
 
     constructor(priority: number) {
@@ -227,6 +230,9 @@ export abstract class AbstractAgentBehaviour extends Behaviour<Acceleration, Age
 
 }
 
+/**
+ * Yeild when changing lanes
+ */
 export class LaneChangeYieldBehaviour extends AbstractAgentBehaviour {
     public evaluate(agent: Agent) {
         if (agent.edge instanceof LaneChangePathSegment && agent.t < 0.10) {
@@ -258,6 +264,9 @@ export class LaneChangeYieldBehaviour extends AbstractAgentBehaviour {
     }
 }
 
+/**
+ * Give space to agents changing lanes
+ */
 export class LaneChangeGiveSpaceBehaviour extends AbstractAgentBehaviour {
     public evaluate(agent: Agent) {
         if (agent.edge instanceof EdgePathSegment) {
@@ -281,6 +290,9 @@ export class LaneChangeGiveSpaceBehaviour extends AbstractAgentBehaviour {
     }
 }
 
+/**
+ * Decides to change lanes if one is in the path
+ */
 export class LaneChangeBehaviour extends AbstractAgentBehaviour {
     public evaluate(agent: Agent) {
         if (agent.path.length > 0 && agent.path[agent.path.length - 1] instanceof LaneChangePathSegment) {
@@ -314,6 +326,9 @@ export class LaneChangeBehaviour extends AbstractAgentBehaviour {
     }
 }
 
+/**
+ * Stop at red lights before turning right
+ */
 export class RedLightRightTurnBehaviour extends AbstractAgentBehaviour {
 
     private speedModifier: number
@@ -349,6 +364,9 @@ export class RedLightRightTurnBehaviour extends AbstractAgentBehaviour {
     }
 }
 
+/**
+ * Accelerate up to full speed
+ */
 export class GoBehaviour extends AbstractAgentBehaviour {
 
     private speedModifier: number
@@ -366,6 +384,9 @@ export class GoBehaviour extends AbstractAgentBehaviour {
 
 }
 
+/**
+ * Don't enter an intersection when there is not enough room to exit
+ */
 export class IntersectionEnterBehaviour extends AbstractAgentBehaviour {
 
     constructor(priority: number) {
@@ -419,6 +440,9 @@ export class IntersectionEnterBehaviour extends AbstractAgentBehaviour {
 
 }
 
+/**
+ * Stop at red lights
+ */
 export class StopBehaviour extends AbstractAgentBehaviour {
 
     private speedModifier: number
@@ -439,6 +463,9 @@ export class StopBehaviour extends AbstractAgentBehaviour {
 
 }
 
+/**
+ * Slow down for upcoming speed limit changes
+ */
 export class SpeedLimitBehaviour extends AbstractAgentBehaviour {
     private speedModifier: number
 
@@ -457,6 +484,9 @@ export class SpeedLimitBehaviour extends AbstractAgentBehaviour {
     }
 }
 
+/**
+ * Stop/slow for other agents on opposing intersection edges
+ */
 export class CutOffBehaviour extends AbstractAgentBehaviour {
 
     public evaluate(agent: Agent): Acceleration {
@@ -488,6 +518,9 @@ export class CutOffBehaviour extends AbstractAgentBehaviour {
     }
 }
 
+/**
+ * Stop according to priority before reaching intersection points
+ */
 export class IntersectionBehaviour extends AbstractAgentBehaviour {
 
     public evaluate(agent: Agent): Acceleration {
@@ -533,6 +566,9 @@ export class IntersectionBehaviour extends AbstractAgentBehaviour {
     }
 }
 
+/**
+ * Yeild at yeild points
+ */
 export class YieldBehaviour extends AbstractAgentBehaviour {
 
     public evaluate(agent: Agent): Acceleration {
@@ -573,6 +609,9 @@ export class YieldBehaviour extends AbstractAgentBehaviour {
 
 }
 
+/**
+ * Slow to aggressive yeilders who have passed the yeild
+ */
 export class YieldCutOffBehaviour extends AbstractAgentBehaviour {
 
     public evaluate(agent: Agent): Acceleration {
@@ -604,6 +643,9 @@ export class YieldCutOffBehaviour extends AbstractAgentBehaviour {
 
 }
 
+/**
+ * Slow down/stop for agents in front
+ */
 export class FollowingBehaviour extends AbstractAgentBehaviour {
 
     public evaluate(agent: Agent): Acceleration {
@@ -636,7 +678,6 @@ export class FollowingBehaviour extends AbstractAgentBehaviour {
                 return new Acceleration(agent.acceleration.start, 0, targetRate > agent.acceleration.rate ? targetRate : agent.acceleration.rate);
             }
         }
-
 
         return undefined;
     }

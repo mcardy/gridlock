@@ -1,6 +1,9 @@
 import { Schema, type } from '@colyseus/schema';
 import { uint32 } from 'random-js';
 
+/**
+ * A 2D point with operations
+ */
 export class Point2D extends Schema {
     @type('number')
     x: number
@@ -41,11 +44,17 @@ export class Point2D extends Schema {
     }
 }
 
+/**
+ * A portion of a path that can be evaluated at a point t between 0 and 1
+ */
 export interface EvaluatablePath {
     next(t: number, l: number): number;
     evaluate(t: number): Point2D;
 }
 
+/**
+ * An evaluatable path implementation for a straight line
+ */
 export class StraightLine implements EvaluatablePath {
 
     private start: Point2D;
@@ -68,6 +77,9 @@ export class StraightLine implements EvaluatablePath {
 
 }
 
+/**
+ * An evaluatable path implementation for a bezier curve
+ */
 export class BezierCurve implements EvaluatablePath {
 
     private origin: Point2D;

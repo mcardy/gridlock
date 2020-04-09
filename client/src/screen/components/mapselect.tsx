@@ -10,6 +10,9 @@ import Col from 'react-bootstrap/Col';
 import uploadFile from '../../util/upload';
 import LoadingOverlay from './loadingoverlay';
 
+/**
+ * A modal to provide the user a list of maps to choose from.
+ */
 export default class MapSelect extends React.Component<{ show: boolean, toggleShow: () => void, processMap: (data: any, name?: string) => void }, { maps: string[], selectedMap: string, loading: boolean }> {
 
     constructor(props) {

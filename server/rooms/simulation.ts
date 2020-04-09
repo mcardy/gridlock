@@ -5,6 +5,9 @@ import { Room, Delayed, Client } from 'colyseus';
 import { Random, MersenneTwister19937 } from 'random-js';
 import { Schema, ArraySchema, type } from '@colyseus/schema';
 
+/**
+ * This class contains a set of metrics on the simulation
+ */
 class Metrics extends Schema {
     @type('number')
     throughput: number = 0;
@@ -25,6 +28,9 @@ class Metrics extends Schema {
     }
 }
 
+/**
+ * This class contains the set of properties containing the simulation
+ */
 class SimulationState extends Schema {
     @type(Map)
     map: Map;
@@ -40,6 +46,9 @@ class SimulationState extends Schema {
     tickTarget: number;
 }
 
+/**
+ * The main simulation Colyseus room
+ */
 export class Simulation extends Room<SimulationState> {
     random: Random; // Random created for each map, server side property
     spawnRate: number;
@@ -164,15 +173,22 @@ export class Simulation extends Room<SimulationState> {
         this.resetMap(); // Reset map
     }
 
+    /**
+     * This is the main tick handler
+     * @param delta The amount of time that has passed since the last tick
+     */
     update(delta) {
+        // If we've reached the tick target, stop
         if (this.state.tickTarget != undefined && this.state.metrics.totalTicks >= this.state.tickTarget) {
             this.state.tickTarget = undefined;
             this.state.paused = true;
         }
         if (!this.state.paused) {
+            // Update basic metrics
             this.state.metricsOverTime.push(new Metrics(this.state.metrics));
             this.state.metrics.totalTicks = this.state.metrics.totalTicks + 1;
             this.state.metrics.throughputPerUnitTime = this.state.metrics.throughput / this.state.metrics.totalTicks;
+            // Update intersections
             if (this.state.metrics.totalTicks % Simulation.TICK_RATE == 0) {
                 for (var intersection of this.state.map.intersections) {
                     intersection.currentTime++;
@@ -187,6 +203,7 @@ export class Simulation extends Room<SimulationState> {
                     }
                 }
             }
+            // Spawn new agents
             if (this.spawnRate != 0 && this.state.metrics.totalTicks % Math.round(Simulation.TICK_RATE / this.spawnRate) == 0) {
                 var source = this.randomVertex(this.state.map.sources);
 
@@ -202,6 +219,7 @@ export class Simulation extends Room<SimulationState> {
                 this.state.metrics.spawned = this.state.metrics.spawned + 1;
                 this.state.map.agents.push(agent);
             }
+            // Update agent metrics
             var speed = 0;
             for (var agent of this.state.map.agents) {
                 agent.update();
@@ -210,7 +228,7 @@ export class Simulation extends Room<SimulationState> {
             if (this.state.map.agents.length != 0)
                 speed = speed / this.state.map.agents.length;
             this.state.metrics.averageSpeed = ((this.state.metrics.totalTicks - 1) * this.state.metrics.averageSpeed + speed) / (this.state.metrics.totalTicks);
-
+            // Remove agents that have reached their destination
             for (var agent of this.state.map.agents.filter(function (agent) { return agent.shouldDespawn() })) {
                 var tripLength = this.state.metrics.totalTicks - agent.id * Math.round(Simulation.TICK_RATE / this.spawnRate);
                 this.state.metrics.averageTripLength = (this.state.metrics.throughput * this.state.metrics.averageTripLength + tripLength) / (this.state.metrics.throughput + 1);
@@ -220,6 +238,9 @@ export class Simulation extends Room<SimulationState> {
         }
     }
 
+    /**
+     * Picks a random vertex from a set according to weights
+     */
     randomVertex(vertices: Vertex[]) {
         var totalWeight = 0;
         for (var v of vertices) {
@@ -235,16 +256,14 @@ export class Simulation extends Room<SimulationState> {
     }
 
     onJoin(client) {
-        //this.sendState(client)
-
-        //this.send(client, testMap);
-        //this.broadcast(`${client.sessionId} joined.`);
     }
 
     onLeave(client) {
-        this.broadcast(`${client.sessionId} left.`);
     }
 
+    /**
+     * Receive messages to change the simulation's state from clients
+     */
     onMessage(client, data) {
         if (data.command == 'pause' && !this.state.paused) {
             this.state.paused = true && this.state.map != undefined && this.state.map.agents != undefined;

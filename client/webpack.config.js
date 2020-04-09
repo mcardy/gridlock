@@ -1,3 +1,10 @@
+/**
+ * Webpack is used to create a single minified javascript file containing all required javascript code
+ * 
+ * Typescript is also compiled to javascript as defined by this configuration. 
+ * This is automatically picked up when the webpack utility is targeted at this directory.
+ */
+
 const path = require("path");
 const webpack = require("webpack");
 

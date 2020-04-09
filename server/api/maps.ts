@@ -1,10 +1,16 @@
+/**
+ * Provides a set of RESTful endpoints to manage maps from files
+ */
+
 import * as fs from 'fs';
 import express from 'express';
 import Config from '../config';
 
 var router = express.Router();
 
-// Restful endpoints for maps
+/**
+ * Get a list of maps
+ */
 router.get('/', (req, resp) => {
     fs.readdir(Config.mapsDirectory, function (err, items) {
         if (err) {
@@ -21,6 +27,9 @@ router.get('/', (req, resp) => {
     });
 });
 
+/**
+ * Get a specific map's contents
+ */
 router.get('/:mapName', (req, resp) => {
     fs.readFile(Config.mapsDirectory + "/" + req.params.mapName + ".json", (err, data) => {
         if (err) {
@@ -31,6 +40,9 @@ router.get('/:mapName', (req, resp) => {
     })
 });
 
+/**
+ * Deletes a specific map
+ */
 router.delete('/:mapName', (req, resp) => {
     fs.unlink(Config.mapsDirectory + "/" + req.params.mapName + ".json", (err) => {
         if (err) {
@@ -41,8 +53,10 @@ router.delete('/:mapName', (req, resp) => {
     });
 });
 
+/**
+ * Creates a new map by a given name
+ */
 router.post('/:mapName', (req, resp) => {
-    // TODO validate schema of saved map
     fs.writeFile(Config.mapsDirectory + "/" + req.params.mapName + ".json", JSON.stringify(req.body), { flag: "w+" }, (err) => {
         if (err) {
             resp.status(500).send(err);
@@ -52,6 +66,9 @@ router.post('/:mapName', (req, resp) => {
     });
 });
 
+/**
+ * Updates a map with a given name
+ */
 router.put('/:mapName', (req, resp) => {
     fs.readFile(Config.mapsDirectory + "/" + req.params.mapName + ".json", (err, data) => {
         if (err) {
@@ -68,4 +85,5 @@ router.put('/:mapName', (req, resp) => {
     })
 });
 
+// Return the router containing the endpoints
 export default router;

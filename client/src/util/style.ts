@@ -1,3 +1,6 @@
+/**
+ * Store some colours, similar to the ones used in app.scss
+ */
 export default {
     primary: 0x9966FF,
     secondary: 0x717A8E,

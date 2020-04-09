@@ -14,6 +14,9 @@ import MapSelect from './components/mapselect';
 
 const menuWidth = 40;
 
+/**
+ * The menu containing the controls for the simulation
+ */
 class SimulationMenu extends React.Component<{ room: Colyseus.Room }, {
     open: boolean, simulationSpeed: number, showSelectMapModal: boolean,
     loading: boolean, agent: number, vertex: number,
@@ -124,6 +127,9 @@ class SimulationMenu extends React.Component<{ room: Colyseus.Room }, {
         this.props.room.send({ command: "reset" });
     }
 
+    /**
+     * Main render function
+     */
     render() {
         var metrics = undefined;
         if (this.state.metrics != undefined) {
@@ -183,6 +189,9 @@ class SimulationMenu extends React.Component<{ room: Colyseus.Room }, {
     }
 }
 
+/**
+ * Run the setup for a simulation. Creates the menu and a connection to the server over http/https
+ */
 export default function runSimulation() {
     var resize = () => {
         display.PixiApp.renderer.resize(window.innerWidth - menuWidth, window.innerHeight);
@@ -194,6 +203,7 @@ export default function runSimulation() {
     var client = new Colyseus.Client(location.protocol.replace("http", "ws") + "//" + host + (location.port ? ':' + location.port : ''));
     client.joinOrCreate("simulation").then(room => {
 
+        // On startup, add the menu and draw the map (if present)
         room.onStateChange.once(function (state: any) {
             console.log("initial room state:", state);
             if (state.map.width) display.drawMap(state.map);
@@ -201,10 +211,12 @@ export default function runSimulation() {
             ReactDOM.render(<SimulationMenu room={room}></SimulationMenu>, document.getElementById("root"))
         });
 
+        // On subsequent updates, refresh the map
         room.onStateChange(function (state: any) {
             if (state.map.width) display.drawMap(state.map);
         });
 
+        // Any messages sent from the server will be received here.
         room.onMessage(function (message) {
         });
 

@@ -1,4 +1,7 @@
-
+/**
+ * A utility function to request a file from the user
+ * @param callback A callback for when the file is loaded.
+ */
 export default function uploadFile(callback?: (result: any, name?: string) => void) {
     var upload = document.createElement('INPUT');
     upload.setAttribute("type", "file");

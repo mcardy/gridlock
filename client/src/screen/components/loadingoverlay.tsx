@@ -1,5 +1,8 @@
 import * as React from "react";
 
+/**
+ * An overlay that can be shown or hidden to indicate loading
+ */
 export default class LoadingOverlay extends React.Component<{ enabled: boolean }, {}> {
 
     render() {
